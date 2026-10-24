@@ -1,135 +1,135 @@
-# 仓库 Shift-left 分析报告
+# Repository Shift-left Analysis Report
 
-> 模板：所有 `待填写` 和空值都必须替换或明确标为未知。不得保留示意数字当成测量结果。本模板的字段是报告约定，不是SpecGuard当前schema。
+> Template: every `To be filled in` and empty value must be replaced or explicitly marked unknown. Do not leave illustrative numbers in place as measurement results. The fields in this template are reporting conventions, not the current SpecGuard schema.
 
-## 1. 结论与最优先行动
+## 1. Conclusion and top-priority actions
 
-本仓最有价值的提前干预：待填写具体行为、后果与证据。已确认发现、候选风险和未知项分别列出。
+The most valuable early intervention in this repository: fill in the specific behavior, consequence, and evidence. Confirmed findings, candidate risks, and unknowns are listed separately.
 
-| 优先级 | 行为/需求 | 用户或业务后果 | 证据等级 | 最小行动 | 负责人 | 验收 |
+| Priority | Behavior/requirement | User or business consequence | Evidence level | Minimal action | Owner | Acceptance |
 |---|---|---|---|---|---|---|
-| 待填 | 待填 | 待填 | 静态/执行/目标故障验证 | 待填 | 待填 | 待填 |
+| To fill | To fill | To fill | Static/execution/targeted-fault validation | To fill | To fill | To fill |
 
-此报告的范围结论：待填写“限定范围静态审查完成/部分完成/执行验证部分完成”等准确表达。没有报告缺口时，明确哪些范围仍未核验，不使用“全仓安全/完整覆盖”。
+Scope conclusion of this report: fill in an accurate statement such as "scoped static review complete / partially complete / execution validation partially complete". When no gaps are reported, state explicitly which scopes remain unverified, and do not use "whole repository safe / complete coverage".
 
-## 2. 身份与可复现条件
+## 2. Identity and reproducibility conditions
 
-| 项目 | 值 |
+| Item | Value |
 |---|---|
-| 仓库与可见性 | 待填写 |
-| 报告受众与工件位置 | 待填写 |
-| Requested ref / resolved SHA | 待填写 |
-| PR base/head 或 scan snapshot | 待填写 |
-| Scope、纳入与排除配置 | 待填写 |
-| Run / attempt / campaign ID | 待填写 |
-| SpecGuard Action SHA / build | 待填写 |
-| Engine、requested/actual model | 待填写 |
-| Prompt/schema/config版本 | 待填写 |
-| 运行时间、环境、预算 | 待填写 |
-| 是否执行目标代码 | 否/是，命令与隔离环境 |
-| Execution / scope / strength / delivery状态 | 各自填写 |
+| Repository and visibility | To be filled in |
+| Report audience and artifact location | To be filled in |
+| Requested ref / resolved SHA | To be filled in |
+| PR base/head or scan snapshot | To be filled in |
+| Scope, include and exclude configuration | To be filled in |
+| Run / attempt / campaign ID | To be filled in |
+| SpecGuard Action SHA / build | To be filled in |
+| Engine, requested/actual model | To be filled in |
+| Prompt/schema/config version | To be filled in |
+| Run time, environment, budget | To be filled in |
+| Whether target code was executed | No/Yes, commands and isolated environment |
+| Execution / scope / strength / delivery status | Fill in each |
 
-## 3. 资产、范围与未支持项
+## 3. Assets, scope, and unsupported items
 
-| 文件纳入决策（互斥） | 数量 | 原因/工件 |
+| File inclusion decision (mutually exclusive) | Count | Reason/artifact |
 |---|---|---|
-| Included | 待填写 | 待填写 |
-| Excluded | 待填写 | 包含generated/config/migration等具体边界 |
-| Unsupported | 待填写 | 语言/文件类型及重要性 |
-| Unreadable | 待填写 | 权限、编码、大小等 |
-| Unclassified | 待填写 | 不可静默丢弃 |
-| Tracked total | 待填写 | 核对上述合计 |
+| Included | To be filled in | To be filled in |
+| Excluded | To be filled in | Include specific boundaries such as generated/config/migration |
+| Unsupported | To be filled in | Language/file type and importance |
+| Unreadable | To be filled in | Permissions, encoding, size, etc. |
+| Unclassified | To be filled in | Must not be silently dropped |
+| Tracked total | To be filled in | Check against the totals above |
 
-角色可多选：source/test/requirement/rule/config；不要把角色数相加当文件总数。
+Roles can be multiple: source/test/requirement/rule/config; do not add up role counts as the total file count.
 
-| 行为任务状态（本snapshot去重） | 数量 | 已读范围/证据及下一步 |
+| Behavior task status (deduplicated for this snapshot) | Count | Scope read / evidence and next step |
 |---|---|---|
-| Reviewed | 待填写 | 待填写 |
-| Unknown | 待填写 | 缺哪项信息、谁能补齐 |
-| Pending / running | 分别填写 | 待填写 |
-| Deferred / failed | 分别填写 | 原因、下次动作 |
+| Reviewed | To be filled in | To be filled in |
+| Unknown | To be filled in | Which information is missing, who can supply it |
+| Pending / running | Fill in separately | To be filled in |
+| Deferred / failed | Fill in separately | Reason, next action |
 
-Submodule、LFS、外部需求、跨仓实现、运行时配置、未展开依赖：待填写。长期未审年龄与本轮真实进度：待填写。
+Submodules, LFS, external requirements, cross-repo implementations, runtime configuration, unexpanded dependencies: to be filled in. Age of long-unreviewed items and actual progress this round: to be filled in.
 
-## 4. 原始目标的四轴结论
+## 4. Four-axis conclusion on the original goal
 
-| 轴 | 状态与证据 | 主要缺口 | 限制 |
+| Axis | Status and evidence | Main gaps | Limits |
 |---|---|---|---|
-| 需求与验收标准 | 来源、版本、冲突、是否只有推断 | 待填写 | 无独立需求时标未知 |
-| 单元测试保护 | 公共行为、边界、错误路径、有效断言 | 待填写 | 静态引用与执行分开 |
-| Coding standard | 适用规则及配置检查的精确SHA/结果 | 待填写 | not configured/pending/unavailable不算通过 |
-| 测试层级 | 现有unit/component/integration/E2E职责 | 待填写 | 可下推与必要集成检查分别解释 |
+| Requirements and acceptance criteria | Source, version, conflicts, whether inferred only | To be filled in | Mark unknown when there is no independent requirement |
+| Unit-test protection | Public behavior, boundaries, error paths, effective assertions | To be filled in | Keep static references and execution separate |
+| Coding standard | Applicable rules and the exact SHA/result of configured checks | To be filled in | not configured/pending/unavailable does not count as passing |
+| Test level | Existing unit/component/integration/E2E responsibilities | To be filled in | Explain separately what can be pushed down and which integration checks are necessary |
 
-## 5. 逐项发现
+## 5. Per-item findings
 
-### F-待填写：具体错误或行为缺口
+### F-To be filled in: specific error or behavior gap
 
-- **归属：** 本PR引入/既有债务/意图待确认；说明依据。
-- **行为和影响：** 谁在什么输入、边界、异常或状态下受到影响。
-- **独立需求：** 来源、revision、原文短引用、适用版本与负责人；无则明示。
-- **实现引用：** 精确repo/SHA/path/行号、最小原文。
-- **现有测试：** 搜索过的范围、相关断言、层级、替代保护与未读位置。
-- **具体反例：** 当前断言仍接受什么错误；或什么需求期望被实现违反。
-- **已核验：** 引用、静态逻辑、运行、目标故障区分能力分别写。
-- **未核验：** 外部实现、配置、执行环境、oracle等限制。
-- **建议：** 最小测试/实现/规格修正及应保留的集成检查。
-- **验证：** 可运行命令、baseline/candidate、预期成功与失败；未执行则明确标注。
-- **负责人和决定：** 待填写。
-- **工件/trace：** 可访问的证据引用，不粘贴密钥或不必要的敏感原文。
+- **Ownership:** introduced by this PR / existing debt / intent to be confirmed; state the basis.
+- **Behavior and impact:** who is affected, under which input, boundary, exception, or state.
+- **Independent requirement:** source, revision, short quote of the original text, applicable version, and owner; state explicitly if none.
+- **Implementation references:** exact repo/SHA/path/line numbers, minimal original text.
+- **Existing tests:** scope searched, relevant assertions, level, alternative protection, and unread locations.
+- **Concrete counterexample:** which wrong behavior the current assertions still accept; or which requirement expectation the implementation violates.
+- **Verified:** write separately what the references, static logic, run, and targeted-fault discrimination verified.
+- **Not verified:** limits such as external implementations, configuration, execution environment, oracle.
+- **Recommendation:** minimal test/implementation/spec correction and the integration checks that should be kept.
+- **Validation:** runnable commands, baseline/candidate, expected success and failure; state explicitly if not executed.
+- **Owner and decision:** to be filled in.
+- **Artifacts/trace:** accessible evidence references; do not paste secrets or unnecessary sensitive original text.
 
-## 6. 需求到行为到保护矩阵
+## 6. Requirement to behavior to protection matrix
 
-| 需求ID/版本 | 公共行为与输入/预期 | 实现 | 测试与断言 | 层级 | 执行版本/结果 | 对齐/保护状态 | 限制 |
+| Requirement ID/version | Public behavior and input/expectation | Implementation | Tests and assertions | Level | Executed version/result | Alignment/protection status | Limits |
 |---|---|---|---|---|---|---|---|
-| 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 未执行/执行结果 | 分别填写 | 待填写 |
+| To be filled in | To be filled in | To be filled in | To be filled in | To be filled in | Not executed/execution result | Fill in separately | To be filled in |
 
-同一需求可能有多个义务，不能凭一条测试覆盖整个复合需求；统计分母来自明确范围，不随模型少输出而缩小。
+One requirement may have multiple obligations; a single test cannot be taken to cover a compound requirement. The statistics denominator comes from an explicit scope and does not shrink when the model outputs less.
 
-## 7. 规则与执行检查
+## 7. Rules and execution checks
 
-| 规则来源/适用路径 | 检查方式 | Check producer / SHA | 实际状态 | 结论 |
+| Rule source/applicable path | Check method | Check producer / SHA | Actual status | Conclusion |
 |---|---|---|---|---|
-| 待填写 | AI规则审查/已有lint等 | 待填写 | 待填写 | 待填写 |
+| To be filled in | AI rule review / existing lint, etc. | To be filled in | To be filled in | To be filled in |
 
-## 8. 测试层级与下推方案
+## 8. Test levels and push-down plan
 
-| 规则/场景 | 当前高层测试职责 | 可独立断言的公共unit seam | 必须保留的集成保护 | 同故障集合比较 | 收益/成本 |
+| Rule/scenario | Current higher-level test responsibility | Public unit seam that can be asserted independently | Integration protection that must be kept | Same-fault-set comparison | Benefit/cost |
 |---|---|---|---|---|---|
-| 待填写 | 待填写 | 待填写或不适合 | 待填写 | 未执行/结果 | 待填写 |
+| To be filled in | To be filled in | To be filled in or not suitable | To be filled in | Not executed/result | To be filled in |
 
-不以新增unit数量证明收益，也不为了下推而引入对私有实现的过度mock。
+Benefit is not proven by the number of new unit tests, and pushing down must not introduce excessive mocking of private implementation.
 
-## 9. 观测与诊断
+## 9. Observation and diagnostics
 
-| 指标/问题 | 结果 | 分母、时间窗、证据 |
+| Metric/question | Result | Denominator, time window, evidence |
 |---|---|---|
-| 首个可执行反馈延迟 | 待填写 | 包括排队；未送达另列 |
-| 收集/pack/model/validation/delivery耗时 | 待填写 | 待填写 |
-| 截断、不可读、预算延期、失败与重试 | 待填写 | 待填写 |
-| 候选→验证→投递，按行为去重 | 待填写 | inline/summary全出口 |
-| 人工valid/invalid/unsure | 待填写 | 样本与裁定方式 |
-| 模型/runner费用，人工时间 | 待填写 | 全部attempt；估计与账单区分 |
-| Trace/event/artifact是否完整 | 待填写 | 缺失不能当零事件 |
+| Latency to first actionable feedback | To be filled in | Includes queueing; undelivered listed separately |
+| Collection/pack/model/validation/delivery time | To be filled in | To be filled in |
+| Truncation, unreadable, budget deferral, failures and retries | To be filled in | To be filled in |
+| Candidate → validated → delivered, deduplicated by behavior | To be filled in | All inline/summary outlets |
+| Human valid/invalid/unsure | To be filled in | Sample and adjudication method |
+| Model/runner cost, human time | To be filled in | All attempts; distinguish estimates from bills |
+| Whether trace/event/artifact is complete | To be filled in | Missing must not be treated as zero events |
 
-最重要的误报与漏报及其失效环节：待填写。
+Most important false positives and false negatives and the stage where they failed: to be filled in.
 
-## 10. 作者处理、保护增强与QA反馈
+## 10. Author handling, protection strengthening, and QA feedback
 
-| 独立行为ID | 人工有效性 | 决定/修复commit | 仅后来有修改还是已验证 | 对应反例/故障执行结果 | QA交接前完成？ | 后续逃逸 |
+| Independent behavior ID | Human validity | Decision/fix commit | Only changed later or verified | Corresponding counterexample/fault execution result | Completed before QA handoff? | Later escapes |
 |---|---|---|---|---|---|---|
-| 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 未知/是/否 | 观察窗与结果 |
+| To be filled in | To be filled in | To be filled in | To be filled in | To be filled in | Unknown/Yes/No | Observation window and result |
 
-未再观察到、dismissed和线程关闭单列，不等同修复。历史回放的direct/indirect/miss与现场有效干预分开；无对照时不声称因果缺陷下降。
+No longer observed, dismissed, and thread-closed are listed separately and are not equivalent to fixed. Historical replay direct/indirect/miss is kept separate from effective on-site interventions; without a control, no causal defect reduction is claimed.
 
-## 11. 下一批与停止条件
+## 11. Next batch and stop conditions
 
-- 下一批待审行为、范围和优先依据：待填写。
-- 缺失需求、权限、语言适配或运行工件：待填写。
-- owner、预算、预计检查窗口：待填写，未知不伪造日期。
-- 何时收缩范围/不再投递某类建议：待填写。
+- Next behaviors to review, scope, and prioritization basis: to be filled in.
+- Missing requirements, permissions, language adaptation, or run artifacts: to be filled in.
+- Owner, budget, expected check window: to be filled in; do not fabricate dates when unknown.
+- When to narrow scope / stop delivering a category of suggestions: to be filled in.
 
-## 12. 工件与复跑记录
+## 12. Artifacts and rerun record
 
-列出实际使用的manifest、scope ledger、证据、validated findings、运行事件、验证结果、命令和环境。没有生成的文件标missing；外部代码引用固定SHA；报告副本与原始代码遵守相同受众边界。
+List the manifest, scope ledger, evidence, validated findings, run events, validation results, commands, and environment actually used. Mark files that were not generated as missing; pin external code references to a SHA; the report copy and the original code follow the same audience boundary.
 
-报告编写/复核人：待填写。资料截止与未完成验证：待填写。
+Report author/reviewer: to be filled in. Data cutoff and incomplete validation: to be filled in.

@@ -1,294 +1,294 @@
-# SpecGuard：第二轮盲点审查与详细优化建议
+# SpecGuard: second-round blind-spot review and detailed optimization recommendations
 
-日期：2026-10-11（Australia/Sydney）。审查基线：`experiment/trace-local-eval`，`eaa60cedaf3a523751443e5a448e9559d3a1ad0d`。
+Date: 2026-10-11 (Australia/Sydney). Review baseline: `experiment/trace-local-eval`, `eaa60cedaf3a523751443e5a448e9559d3a1ad0d`.
 
-**这个仓库做什么：** SpecGuard 在 PR 上静态检查需求、行为与测试证据，发布缺失测试、弱测试和规范问题。它不执行被审查代码，也不阻断合并。本轮按“同一仓库多个 PR、每个 PR 多次 push、CI 与审查异步结束、偶发 API 失败”的普通采用场景审查，不假设超大规模。
+**What this repository does:** SpecGuard statically checks requirements, behavior, and test evidence on a PR, and publishes missing-test, weak-test, and standards issues. It does not execute the code under review and does not block merges. This round reviews the ordinary adoption scenario of "several PRs in the same repository, several pushes per PR, CI and review finishing asynchronously, occasional API failures", and does not assume very large scale.
 
-**结论：先修复审查结果的可信度和生命周期，再扩大检出范围。** 当前最大的新风险是：不知道的东西可能被当作审查完成，仍存在的问题可能被自动关闭，模型遵守提示词反而会触发校验降级。增加检索、模型轮数或评测样本，不能修复这些问题。
+**Conclusion: first fix the credibility and lifecycle of review results, then widen the detection scope.** The biggest new risks at present are: things not known may be treated as review completed, problems that still exist may be closed automatically, and a model that obeys the prompt may instead trigger validation downgrades. Adding retrieval, model rounds, or evaluation samples cannot fix these.
 
-本轮只新增分析和证据文件，没有修改运行时代码，也没有向 GitHub 发布内容。下文的“修复”均为实施建议。
+This round only adds analysis and evidence files, did not modify runtime code, and did not publish anything to GitHub. The "fixes" below are all implementation recommendations.
 
-## 1. 本轮证据与上一轮结论的修正
+## 1. Evidence this round and corrections to the previous round's conclusions
 
-检查了 collect → requirements/trace → prompt → post 的主流程，以及 preflight、检查结果收集、Action 接线、CI 和评测器。运行现有测试：**395 passed / 0 failed / 0 skipped**，约 66 秒。测试先受沙箱进程启动限制，随后在允许启动子进程的本地环境完成；这不是生产 Linux runner 的验收。
+The main flow of collect → requirements/trace → prompt → post was checked, along with preflight, check-result collection, Action wiring, CI, and the evaluator. Running the existing tests: **395 passed / 0 failed / 0 skipped**, about 66 seconds. The tests were first limited by sandbox process launching, and then completed in a local environment that allows spawning child processes; this is not acceptance on a production Linux runner.
 
-另做了 **13 个定向探针**：复用测试夹具、模拟 GitHub API，并用临时 Git 仓库复现历史坐标问题。原始结果见 [audit-evidence-2026-10-11.json](audit-evidence-2026-10-11.json)。探针结果证明特定输入下的确定性行为，不证明生产发生频率或模型准确率；没有付费模型调用。
+Another **13 targeted probes** were made: reusing test fixtures, simulating the GitHub API, and reproducing historical-coordinate problems with temporary Git repositories. The raw results are in [audit-evidence-2026-10-11.json](audit-evidence-2026-10-11.json). The probe results prove deterministic behavior under specific inputs, and do not prove the production frequency or model accuracy; no paid model calls were made.
 
-前两份分析需要以下修正：
+The first two analyses need the following corrections:
 
-| 旧判断 | 本轮修正 | 影响 |
+| Old judgment | Correction this round | Impact |
 |---|---|---|
-| 指纹消失、锚点被改即可确定 did-fix | 只能确定“该发现本轮未出现，附近代码有变化”；遗漏、改名、降级、忽略配置都能产生同样观测 | N18 不能直接作为修复率指标，见 M14 |
-| 两个 orpc 合并规则可能被 `.md` 过滤丢失 | 保存的 #1705、#1718 PR 正文均含合并规则；直接送入 `collectRequirements` 后规则仍在，结构化 criteria 数却均为 0 | 优先研究散文需求的识别与契约，不能把漏报归因于文档过滤 |
-| 没有 spec 文档时，alignment 不适用 | PR 或 issue 仍然可以是需求来源；当前提示词与 validator 对此互相矛盾 | 见 M5，不需要扩充文档检索即可改善 |
-| 所有配置、性能、跨服务契约问题都静态不可见 | 应按具体问题分解：配置默认值、超时单位、请求 schema 不匹配可能静态可见；部署环境、真实竞态和容量结论可能需要运行证据 | 缺陷分类表增加“当时可获得什么证据”，不要只靠类别名排除 |
-| 50 个缺陷的比例可以直接决定关闭追溯 | 可用于形成先验和选择实验，不能单独证明某功能无价值；小样本、相同机制重复和严重度都会影响结论 | 先补对照与不确定性，再定默认值 |
+| A vanished fingerprint or a changed anchor is enough to determine did-fix | It can only be determined that "the finding did not appear this round, and nearby code changed"; omission, renaming, downgrade, and ignore configuration can all produce the same observation | N18 cannot be used directly as a fix-rate metric, see M14 |
+| Two orpc merge rules might be lost by the `.md` filter | The saved PR bodies of #1705 and #1718 both contain the merge rule; fed directly into `collectRequirements`, the rule is still there, but the structured criteria count is 0 in both | Prioritize studying the recognition and contract of prose requirements; misses cannot be attributed to document filtering |
+| Without a spec document, alignment does not apply | The PR or issue can still be a requirement source; the current prompt and the validator contradict each other on this | See M5; it can be improved without expanding document retrieval |
+| All configuration, performance, and cross-service contract problems are statically invisible | They should be decomposed by specific problem: configuration defaults, timeout units, and request schema mismatches may be statically visible; deployment environment, real races, and capacity conclusions may need runtime evidence | The defect classification table adds "what evidence was available at the time"; do not exclude by category name alone |
+| The proportions among 50 defects can directly decide whether to turn off tracing | It can be used to form a prior and choose experiments, but cannot alone prove a feature worthless; small samples, repeated identical mechanisms, and severity all affect the conclusion | Add controls and uncertainty first, then decide defaults |
 
-第三个旧样本 `orpc-2057<-1721` 的 schema/handler 文件位置，本轮没有原始 checkout，**尚未核实**。不把前两个样本的结论推广到它。
+For the file locations of the schema/handler of the third old sample `orpc-2057<-1721`, there was no original checkout this round, so **they are not yet verified**. The conclusions of the first two samples are not generalized to it.
 
-## 2. 必须修复：普通采用场景已经会触发的缺口
+## 2. Must fix: gaps that ordinary adoption scenarios already trigger
 
-优先级 P1 表示在扩大 pilot 前应修复；没有发现足以凭本轮证据定为紧急 P0 的线上事故。M 编号是本轮新增，不与旧报告 U1–U20、N1–N18 混用。
+Priority P1 means to be fixed before expanding the pilot; no production incident was found that this round's evidence would justify classifying as an urgent P0. The M numbers are new in this round and are not to be mixed with the old report's U1–U20 and N1–N18.
 
-### M1 · P1：`resolve_stale: false` 在 Action 中没有生效
+### M1 · P1: `resolve_stale: false` has no effect in the Action
 
-- **是什么：** 用户可以选择是否自动关闭旧 review 线程。证据：`action.yml:25`、发布步骤环境 `action.yml:148`、`src/post.js:929`。
-- **问题：** 输入有定义，但发布步骤没有传入 `RESOLVE_STALE`。通常该环境变量为空，`env.RESOLVE_STALE !== 'false'` 仍为真；现有测试直接设置环境变量，绕过了缺失的 Action 接线。
-- **最小修复：** 在发布步骤映射 `RESOLVE_STALE: ${{ inputs.resolve_stale }}`；增加一个输入到运行环境的契约检查。
-- **不修的后果：** 用户即使关闭自动处理，工具仍会修改线程状态，削弱对配置的信任。
+- **What it is:** Users can choose whether to automatically close old review threads. Evidence: `action.yml:25`, the publishing step environment `action.yml:148`, `src/post.js:929`.
+- **Problem:** The input is defined, but the publishing step does not pass in `RESOLVE_STALE`. Normally that environment variable is empty, and `env.RESOLVE_STALE !== 'false'` is still true; the existing test sets the environment variable directly, bypassing the missing Action wiring.
+- **Minimal fix:** Map `RESOLVE_STALE: ${{ inputs.resolve_stale }}` in the publishing step; add a contract check from input to runtime environment.
+- **Consequence of not fixing:** Even if the user turns off automatic handling, the tool still changes thread state, undermining trust in the configuration.
 
-**验收：** 从 Action 输入配置开始构造 `false` 场景，GraphQL resolve 调用数必须为 0；不能只重测直接设置环境变量的旧用例。
+**Acceptance:** Construct the `false` scenario starting from the Action input configuration; the number of GraphQL resolve calls must be 0; it is not enough to re-run the old test case that sets the environment variable directly.
 
-### M2 · P1：发现降级、移到摘要，也会被当成“问题消失”
+### M2 · P1: A finding downgraded or moved to the summary is also treated as "problem gone"
 
-- **是什么：** 发布器根据本轮指纹集合关闭旧线程。证据：`src/post.js:702`、`src/post.js:827`、`src/post.js:929`。
-- **问题：** 当前集合仅来自 `merged`，没有包括部分摘要发现；关闭条件只检查 diff 是否截断。两个探针分别复现：引用失败变成 `unknown` 后旧线程被关闭；同一发现仍在“diff 外断言”摘要中，原线程也被关闭。
-- **最小修复：** 立即禁止降级或不完整运行自动关闭线程，存活集合涵盖所有验证后仍存在的发现。对于“本轮没报”的旧项，需要明确的再次评估结果；拿不到这一证据时保留线程，近期可暂时关闭默认自动解决。
-- **不修的后果：** 缺陷并未修复，UI 却显示 resolved；之后再次出现时，历史评论去重还可能抑制重新提醒。
+- **What it is:** The publisher closes old threads according to this round's fingerprint set. Evidence: `src/post.js:702`, `src/post.js:827`, `src/post.js:929`.
+- **Problem:** The set currently comes only from `merged` and does not include partial summary findings; the closing condition only checks whether the diff was truncated. Two probes reproduce this: after a citation failure turned a finding into `unknown`, the old thread was closed; when the same finding was still in the "asserted outside the diff" summary, the original thread was also closed.
+- **Minimal fix:** Immediately forbid downgraded or incomplete runs from automatically closing threads, and make the live set cover all findings still present after validation. For old items that were "not reported this round", an explicit re-assessment result is needed; when this evidence cannot be obtained, keep the thread, and in the near term default automatic resolution can be temporarily turned off.
+- **Consequence of not fixing:** The defect is not fixed, yet the UI shows resolved; when it appears again later, historical comment deduplication may also suppress the re-alert.
 
-**验收：** 覆盖 unknown、来源读取失败、trace 截断、摘要迁移、删除测试、同一问题再次出现；这些状态不能仅因缺少当前 inline 指纹而自动解决。修复判定与评论去重分别测试。
+**Acceptance:** Cover unknown, source read failure, trace truncation, summary migration, deleted tests, and the same problem reappearing; these states cannot be auto-resolved merely because the current inline fingerprint is missing. Fix determination and comment deduplication are tested separately.
 
-### M3 · P1：追溯的限制记录存在，却没有影响最终完整性
+### M3 · P1: Trace limitations are recorded but do not affect final completeness
 
-- **是什么：** `trace.js` 会记录候选文档、时间、条目上限等限制。证据：`src/trace.js:653`、`src/trace.js:663`、`src/trace.js:741`；消费端 `src/post.js:808`。
-- **问题：** 限制写入 `requirements-status.json.spec.limitations`，post 主要看顶层 `status/limitations`。探针构造“500 个候选文档未审查”、顶层仍为 available 的结果，摘要仍显示 `No test gaps found`，没有限制提示，并写入完成标记。
-- **最小修复：** 将相关 `spec.limitations` 合并到确定性的运行完整性状态；明确区分“只截断内联提示、文件仍可读取”和“collector 实际没有采集”。最终摘要、预检缓存与自动解决共用这个状态。
-- **不修的后果：** 模型若没有复述限制，用户看不到遗漏；green job 与干净摘要形成过度放心。
+- **What it is:** `trace.js` records limitations such as candidate documents, time, and item caps. Evidence: `src/trace.js:653`, `src/trace.js:663`, `src/trace.js:741`; consumer side `src/post.js:808`.
+- **Problem:** Limitations are written to `requirements-status.json.spec.limitations`, while post mainly looks at the top-level `status/limitations`. A probe constructed a result with "500 candidate documents unreviewed" and top level still available; the summary still showed `No test gaps found`, with no limitation notice, and wrote the completion marker.
+- **Minimal fix:** Merge the relevant `spec.limitations` into the deterministic run-completeness status; clearly distinguish "only the inline prompt was truncated, the file is still readable" from "the collector did not actually collect". The final summary, preflight cache, and auto-resolve share this status.
+- **Consequence of not fixing:** If the model does not restate the limitation, the user cannot see the omission; a green job and a clean summary together create excessive reassurance.
 
-**验收：** 不依赖模型输出，向 collector 状态注入真实采集缺口后，摘要必须显示范围和原因，不能给出无保留的干净结论或关闭旧项。
+**Acceptance:** Without relying on model output, after injecting a real collection gap into the collector state, the summary must show the scope and reason, and must not give an unqualified clean conclusion or close old items.
 
-### M4 · P1：超时但留下合法 JSON，会被当成正常完成
+### M4 · P1: A timeout that leaves valid JSON is treated as normal completion
 
-- **是什么：** engine 写 `engine-status`，post 读取 findings。证据：`action.yml:144`、`src/post.js:763`。
-- **问题：** 只有 JSON 读取/解析失败时才检查 `engine-status`。探针同时放入合法 findings 与 `timeout`，结果正常发布 review、关闭旧线程、写完成标记，摘要不显示超时。
-- **最小修复：** 独立读取并评估 engine 退出状态，再决定是否使用部分结果。保留可验证发现可以有价值，但必须标为未完成，禁止自动解决和成功缓存。
-- **不修的后果：** 模型退出失败与成功无法可靠区分，同一 HEAD 的下一次运行还可能被预检跳过。
+- **What it is:** The engine writes `engine-status`, and post reads findings. Evidence: `action.yml:144`, `src/post.js:763`.
+- **Problem:** `engine-status` is checked only when JSON reading/parsing fails. A probe put valid findings and `timeout` together; the result published the review normally, closed old threads, wrote the completion marker, and the summary did not show the timeout.
+- **Minimal fix:** Read and evaluate the engine exit status independently, and then decide whether to use partial results. Keeping verifiable findings can be valuable, but they must be marked incomplete, with automatic resolution and success caching forbidden.
+- **Consequence of not fixing:** A model exiting with failure cannot be reliably distinguished from success, and the next run on the same HEAD may also be skipped by preflight.
 
-**验收：** 测试 `timeout + valid JSON`、`failed + valid JSON`、成功但 invalid JSON，以及正常完成四种组合；分别核对摘要、缓存标记和线程副作用。
+**Acceptance:** Test four combinations: `timeout + valid JSON`, `failed + valid JSON`, success but invalid JSON, and normal completion; check the summary, cache marker, and thread side effects for each.
 
-### M5 · P1：只有 PR/issue 需求时，提示词和校验器冲突
+### M5 · P1: With only PR/issue requirements, the prompt and the validator conflict
 
-- **是什么：** 文档追溯按需加入提示词，而基本需求来源一直包括 PR/issue。证据：`src/prompt.js:32`、`src/prompt.js:98`、`skills/test-review/SKILL.md:32`、`src/post.js:83`。
-- **问题：** 没有仓库 spec 时，提示词要求 `alignment=not_applicable`；validator 又禁止有 linked requirement 的行使用该值。探针中的 PR 正文 R1 被正常链接后，按照提示词生成的 alignment 被降为 unknown。
-- **最小修复：** 将“要不要做仓库文档检索”与“有没有需求可以判断一致性”分开。只有完全没有关联需求的行为才用 not_applicable；PR/issue 的基本一致性规则始终保留，并同步两份 skill。
-- **不修的后果：** 最常见的“没有专门 spec，但 PR 有验收说明”场景会出现人为制造的不确定性，难以验证 requirement-aware 的核心价值。
+- **What it is:** Document tracing is added to the prompt on demand, while the basic requirement sources always include the PR/issue. Evidence: `src/prompt.js:32`, `src/prompt.js:98`, `skills/test-review/SKILL.md:32`, `src/post.js:83`.
+- **Problem:** When there is no repository spec, the prompt requires `alignment=not_applicable`; the validator in turn forbids rows with a linked requirement from using that value. In the probe, after the PR body R1 was linked normally, the alignment generated per the prompt was downgraded to unknown.
+- **Minimal fix:** Separate "whether to do repository document retrieval" from "whether there is a requirement against which consistency can be judged". Use not_applicable only for behavior with no linked requirement at all; keep the basic PR/issue consistency rule always, and sync the two skills.
+- **Consequence of not fixing:** In the most common scenario of "no dedicated spec, but the PR has acceptance notes", artificial uncertainty appears, making it hard to verify the core value of being requirement-aware.
 
-**验收：** PR-only、issue-only、spec-only、无需求、`trace: off + PR requirement` 五组输入，prompt、schema、validator 的状态语义一致。`trace: off` 不应自动取消 PR 需求审查。
+**Acceptance:** For five inputs — PR-only, issue-only, spec-only, no requirement, and `trace: off + PR requirement` — the status semantics of prompt, schema, and validator are consistent. `trace: off` should not automatically cancel PR requirement review.
 
-### M6 · P1：HEAD 不是完整的审查输入版本
+### M6 · P1: HEAD is not the full version of the review input
 
-- **是什么：** preflight 用 summary 中的 HEAD 标记避免重复花费。证据：`src/preflight.js:8`、`src/preflight.js:16`、`src/post.js:431`、README workflow 事件配置。
-- **问题：** 同一 HEAD 下，PR 正文、关联 issue、基线规范、工具配置及 checks 都可能变化；只看 HEAD 会跳过重审。并且 partial/unknown 的有效报告也写入同样标记，默认事件列表还不包含 PR 正文 edited。
-- **最小修复：** 把缓存键定义为实际审查输入的摘要：HEAD、diff base、规范基线、需求文本摘要、Action/skill/schema 版本和相关配置。近期先允许未完成结果重试，并让 PR 正文编辑触发；检查结果刷新应与模型重跑分开，避免为 lint 从 pending 变 passed 再付一次模型费用。
-- **不修的后果：** 用户更新了需求但结论不更新；暂时读不到 issue、改大预算后重跑，也可能一直沿用旧结果。
+- **What it is:** preflight uses the HEAD marker in the summary to avoid repeated spend. Evidence: `src/preflight.js:8`, `src/preflight.js:16`, `src/post.js:431`, the README workflow event configuration.
+- **Problem:** Under the same HEAD, the PR body, linked issue, baseline specification, tool configuration, and checks can all change; looking only at HEAD skips re-review. Also, valid partial/unknown reports write the same marker, and the default event list does not include PR body edited.
+- **Minimal fix:** Define the cache key as a digest of the actual review inputs: HEAD, diff base, specification baseline, requirement text digest, Action/skill/schema versions, and relevant configuration. In the near term, first allow incomplete results to be retried and let PR body edits trigger; check-result refresh should be separate from model re-runs, to avoid paying for another model run when lint goes from pending to passed.
+- **Consequence of not fixing:** The user updates the requirement but the conclusion does not update; re-running after an issue was temporarily unreadable or the budget was raised may also keep reusing the old result.
 
-**验收：** 相同 HEAD + 相同输入可以跳过；相同 HEAD + 修改 PR body/issue/配置不能误判命中。issue 更新没有事件通道时，要显示依赖版本并提供明确刷新入口，不声称实时。
+**Acceptance:** Same HEAD + same inputs can skip; same HEAD + modified PR body/issue/configuration must not hit by mistake. When an issue update has no event channel, show the dependency version and provide an explicit refresh entry point, without claiming real time.
 
-### M7 · P1：预检、去重和自动解决并未统一验证 bot 身份
+### M7 · P1: Preflight, deduplication, and auto-resolve do not uniformly verify the bot identity
 
-- **是什么：** marker 用来识别 SpecGuard 评论。证据：`src/preflight.js:8`、`src/post.js:714`、`src/post.js:827`；对照 sticky 更新的身份检查 `src/post.js:748`。
-- **问题：** 三处只要求作者是 Bot 且 marker 匹配，不核对是否本工具的发布者。探针复现其他 bot 的带标记 summary 触发跳过，以及其他 bot 的带指纹线程被解决；这不需要假设恶意行为，转发或复制也能触发。
-- **最小修复：** 全部路径复用同一发布者/App 身份及工具命名空间规则；身份不可确定时，不自动解决不明归属的线程。
-- **不修的后果：** 不同机器人互相影响，导致漏审、错误去重或操作别人发布的线程。
+- **What it is:** The marker is used to identify SpecGuard comments. Evidence: `src/preflight.js:8`, `src/post.js:714`, `src/post.js:827`; compare the identity check of the sticky update `src/post.js:748`.
+- **Problem:** The three places only require that the author is a Bot and the marker matches, without checking whether it is this tool's publisher. Probes reproduce another bot's marked summary triggering a skip, and another bot's fingerprinted thread being resolved; this does not need malicious behavior to be assumed, since forwarding or copying can also trigger it.
+- **Minimal fix:** All paths reuse the same publisher/App identity and tool namespace rules; when the identity cannot be determined, do not auto-resolve threads of unclear ownership.
+- **Consequence of not fixing:** Different bots affect each other, causing missed reviews, wrong deduplication, or operating on threads published by others.
 
-**验收：** 同 marker + 不同 bot 不应命中预检、去重或 resolve；本工具历史合法评论仍可识别。分别验证 job token 与自定义 token 的实际身份，不能假定二者一致。
+**Acceptance:** Same marker + different bot should not hit preflight, deduplication, or resolve; this tool's historical legitimate comments can still be recognized. Verify the actual identity of the job token and of a custom token separately, without assuming the two are the same.
 
-### M8 · P1：重新确认 HEAD 失败，发布反而继续
+### M8 · P1: When reconfirming HEAD fails, publishing continues instead
 
-- **是什么：** 发布前检查 PR 是否已经被新提交替代。证据：`src/post.js:733`、`src/post.js:743`、`src/post.js:903`。
-- **问题：** `pulls.get` 异常时 `current()` 返回 true。探针让三次读取均失败，仍然发布 review 和 sticky summary；因此“旧 HEAD 不覆盖当前报告”的保证有明确例外。
-- **最小修复：** 无法确认最新状态时保留 job summary/本次运行产物，推迟修改 PR summary 和线程；发布前同时检查 PR 是否仍处于允许发布的状态，并携带输入版本。对检查成功后仍可能发生的极短竞态，采用运行并发控制和版本化结果减轻，而不是声称原子更新。
-- **不修的后果：** 网络错误时更容易覆盖新结论，或者在合并之后才修改审查状态。
+- **What it is:** Before publishing, check whether the PR has been superseded by a new commit. Evidence: `src/post.js:733`, `src/post.js:743`, `src/post.js:903`.
+- **Problem:** When `pulls.get` throws, `current()` returns true. A probe made all three reads fail, and the review and sticky summary were still published; so the guarantee that "an old HEAD does not overwrite the current report" has a clear exception.
+- **Minimal fix:** When the latest state cannot be confirmed, keep the job summary/this run's artifacts, and postpone modifying the PR summary and threads; before publishing, also check whether the PR is still in a state that allows publishing, and carry the input version. For the very short race that can still happen after the check succeeds, mitigate with run concurrency control and versioned results, rather than claiming atomic update.
+- **Consequence of not fixing:** On network errors it is easier to overwrite newer conclusions, or to modify review status only after the merge.
 
-**验收：** 读取失败、HEAD 变化、PR 已关闭三种场景都不覆盖当前 sticky；本地结果仍可查阅。测试只能证明所覆盖的时序，不应宣称完全消除了并发竞态。
+**Acceptance:** In the three scenarios of read failure, HEAD change, and PR already closed, the current sticky is not overwritten; local results can still be viewed. Tests can only prove the sequences they cover, and should not claim the concurrency race is completely eliminated.
 
-### M9 · P1：非核心的评论列表失败，会丢掉整个审查交付
+### M9 · P1: A failure of a non-core comment list drops the whole review delivery
 
-- **是什么：** 发布前读取历史 review 评论做去重。证据：`src/post.js:827`、`src/post.js:936`。
-- **问题：** 该读取没有局部错误处理，异常被最外层转换成 warning 后退出。模拟 503 的探针得到 0 review、0 sticky summary；已经完成的分析没有正常进入交付路径。
-- **最小修复：** 单独处理去重读取失败：记录交付降级，至少写 job summary 和可下载结果；在无法安全去重时可仅更新摘要，不继续生成可能重复的 inline 评论。重试仍失败时也要有明确结果状态。
-- **不修的后果：** 模型成本已经付出，用户只看到绿色作业或一条日志，难以区分“没问题”与“没送达”。
+- **What it is:** Before publishing, historical review comments are read for deduplication. Evidence: `src/post.js:827`, `src/post.js:936`.
+- **Problem:** That read has no local error handling, and the exception is turned into a warning by the outermost layer and the process exits. A probe simulating 503 got 0 reviews and 0 sticky summaries; the completed analysis did not enter the delivery path normally.
+- **Minimal fix:** Handle the dedup-read failure separately: record the delivery degradation, and at least write the job summary and downloadable results; when safe deduplication is impossible, update only the summary and do not continue to generate inline comments that may be duplicates. When retries still fail, there should also be a clear result status.
+- **Consequence of not fixing:** The model cost has been paid, but the user sees only a green job or one log line, and it is hard to tell "no problem" from "not delivered".
 
-**验收：** 故障注入 listReviewComments 503/403，最终仍有可读结果与 `delivery_degraded` 状态，不能仅捕获异常后结束。
+**Acceptance:** Inject listReviewComments 503/403 faults; in the end there is still a readable result and a `delivery_degraded` status, rather than merely catching the exception and ending.
 
-### M10 · P1：同名 check 的成功结果可以掩盖另一来源的失败
+### M10 · P1: A successful result with the same check name can mask a failure from another source
 
-- **是什么：** 用户配置 `check:lint` 来确认规范工具执行结果。证据：`src/checks.js:13`。
-- **问题：** 匹配只看名称，然后选最大 id，producer 仅用于显示。探针给出 trusted-ci 的失败和 other-app 的较新同名成功，汇总结果是 passed。
-- **最小修复：** 同名结果来自多个 producer 时返回明确的歧义状态，不能直接 passed；需要时允许指定 App/工作流身份。对于同一来源的合法重跑，再应用“最新一次”的规则。
-- **不修的后果：** “coding standards confirmed”确认的可能不是团队指定的检查，工具证据变成错误背书。
+- **What it is:** The user configures `check:lint` to confirm the execution result of standards tools. Evidence: `src/checks.js:13`.
+- **Problem:** Matching looks only at the name and then picks the largest id; the producer is used only for display. A probe gave a failure from trusted-ci and a newer same-named success from other-app, and the aggregate result was passed.
+- **Minimal fix:** When same-named results come from multiple producers, return an explicit ambiguity status, which cannot directly be passed; allow specifying the App/workflow identity when needed. For a legitimate re-run from the same source, apply the "latest" rule.
+- **Consequence of not fixing:** "coding standards confirmed" may be confirming a check not specified by the team, and the tool evidence becomes a wrong endorsement.
 
-**验收：** 两个来源同名、一失败一成功时不可 passed；同一来源重跑成功可按文档规则通过。应保留来源和检查 id，方便审计。
+**Acceptance:** With two sources of the same name, one failing and one succeeding, it must not be passed; a successful re-run from the same source can pass according to the documented rule. The source and check id should be kept for auditing.
 
-### M11 · P1：three-dot diff 的旧行号，被拿到另一个提交上 blame
+### M11 · P1: Old line numbers of a three-dot diff are blamed on a different commit
 
-- **是什么：** collector 的 PR diff 来自 merge-base 到 HEAD，历史意图却用 BASE_SHA blame。证据：`src/collect.sh:41`、`src/requirements.js:162`；追溯也在 `src/trace.js:668` 与 `src/trace.js:684` 使用两种基线。
-- **问题：** 目标分支前进并在文件顶部插行时，diff 左侧行号属于共同祖先，不再对应最新 BASE。临时仓库复现：diff 指向旧文件 7–13 行 `L7…L13`，实际 BASE 上同坐标却是 `INSERT7…INSERT10,L1…L3`。
-- **最小修复：** 显式记录 `diff_base_sha = git merge-base BASE HEAD`，用于 diff 旧侧引用、历史 blame、需求变更比较；另保留 `policy_base_sha` 作为可信规范来源，不把两者机械合并。
-- **不修的后果：** 关联到不相干的历史意图，或错误判断需求是否由本 PR 改动；长生命周期分支和并行开发尤其容易遇到。
+- **What it is:** The collector's PR diff is from merge-base to HEAD, while historical intent uses BASE_SHA for blame. Evidence: `src/collect.sh:41`, `src/requirements.js:162`; tracing also uses two baselines at `src/trace.js:668` and `src/trace.js:684`.
+- **Problem:** When the target branch moves forward and inserts lines at the top of a file, the left-side line numbers of the diff belong to the common ancestor and no longer correspond to the latest BASE. Reproduced in a temporary repository: the diff points to old file lines 7–13 `L7…L13`, while the same coordinates in the actual BASE are `INSERT7…INSERT10,L1…L3`.
+- **Minimal fix:** Explicitly record `diff_base_sha = git merge-base BASE HEAD`, used for old-side references of the diff, historical blame, and requirement change comparison; keep `policy_base_sha` separately as the trusted specification source, and do not mechanically merge the two.
+- **Consequence of not fixing:** Linking to unrelated historical intent, or wrongly judging whether a requirement was changed by this PR; long-lived branches and parallel development are especially prone to this.
 
-**验收：** 目标分支独立插行、改 spec、改规范，PR 自身保持相同的三个用例；历史与 diff 对齐，规范仍取所选可信基线。复杂多 merge-base 情况应明确策略或降级。
+**Acceptance:** With the target branch independently inserting lines, changing the spec, and changing the specification, while the PR itself stays the same, the three cases hold; history aligns with the diff, and the specification is still taken from the chosen trusted baseline. Complex multi-merge-base cases should have an explicit strategy or degrade.
 
-## 3. 应当修复：影响评测与优化方向的盲点
+## 3. Should fix: blind spots affecting evaluation and optimization direction
 
-### M12 · P2：case pass 不代表没有误报
+### M12 · P2: A case pass does not mean no false positives
 
-- **是什么：** 评测器同时统计 `fp` 和 `pass`。证据：`eval/grade.js:100`、`eval/grade.js:144`。
-- **问题：** `pass` 没有要求 `falsePositives.length === 0`。探针给出 1 个正确命中、1 个额外误报，仍返回 `pass: true`；此外 allow_summary 仅按 kind/path 匹配，多个预期还可能共享同一个摘要命中。
-- **最小修复：** 明确区分“预期命中通过”和“质量门槛通过”，在质量门槛里加入明确误报预算；摘要匹配采用与 inline 一样的一对一记账，并核对行为身份。
-- **不修的后果：** `12/12 passed` 容易被读成 12 次都正确；摘要化会改变分数而不一定改善检出。
+- **What it is:** The evaluator counts both `fp` and `pass`. Evidence: `eval/grade.js:100`, `eval/grade.js:144`.
+- **Problem:** `pass` does not require `falsePositives.length === 0`. A probe gave 1 correct hit and 1 extra false positive, and still returned `pass: true`; in addition, allow_summary matches only by kind/path, and multiple expectations may also share the same summary hit.
+- **Minimal fix:** Clearly distinguish "expected hit passed" from "quality gate passed", and add an explicit false-positive budget to the quality gate; summary matching adopts the same one-to-one accounting as inline, and checks behavior identity.
+- **Consequence of not fixing:** `12/12 passed` is easily read as all 12 being correct; moving to summary changes the score without necessarily improving detection.
 
-**验收：** 在已有命中结果中额外加入一个已知误报，应使零误报门槛失败；一条摘要不能同时满足两个不同义务。`fp` 目前并非没有统计，问题在指标定义和使用方式。
+**Acceptance:** Adding a known false positive to an existing hit result should make the zero-false-positive gate fail; one summary entry cannot satisfy two different obligations at once. `fp` is not currently uncounted; the problem is in the metric definition and usage.
 
-### M13 · P2：发现了文件，不等于模型读过，更不等于审查过
+### M13 · P2: A discovered file does not mean the model read it, much less reviewed it
 
-- **是什么：** 摘要的 `Sources read` 来自 collector 清单。证据：`src/post.js:423`、`src/post.js:933`；提示词内联上限 `src/prompt.js:7`。
-- **问题：** 当前没有以实际工具读取记录证明所有列出的文件都被模型读过；40 KiB 后的 diff 仅通过提示要求补读，也不能由此保证完整分析。一个文件可以被发现、未读、没有义务，而报告仍缺少该阶段的明确标记。
-- **最小修复：** 立即把标题改成 `Sources available / collected`。增加有限的范围账本：候选、采集、提供给模型、模型声明评估、引用已校验、已交付；工具日志不可得时，实际读取标为 unknown，不能用模型自报替代运行证据。
-- **不修的后果：** 用户和评测者高估“完整报告”的覆盖范围，定位漏报时只会继续调整模型提示。
+- **What it is:** The summary's `Sources read` comes from the collector's manifest. Evidence: `src/post.js:423`, `src/post.js:933`; the prompt inline limit `src/prompt.js:7`.
+- **Problem:** There is currently no record of actual tool reads proving that the model read all the listed files; the diff after 40 KiB is only asked to be read in a follow-up through the prompt, which cannot guarantee a complete analysis either. A file can be discovered, unread, and have no obligations, while the report still lacks a clear marker for that stage.
+- **Minimal fix:** Immediately rename the title to `Sources available / collected`. Add a limited scope ledger: candidate, collected, provided to the model, evaluated as declared by the model, citation validated, delivered; when tool logs are unavailable, mark actual reads as unknown, and do not substitute model self-reports for runtime evidence.
+- **Consequence of not fixing:** Users and evaluators overestimate the coverage of a "complete report", and when locating misses will only keep adjusting the model prompt.
 
-**验收：** 已发现但没有读取证明的文件不得写成已读；缺少 obligation 也不能自动解释成无行为变化。模型声明与确定性验证分列。
+**Acceptance:** Files that were discovered but have no proof of being read must not be written as read; a missing obligation also cannot be automatically interpreted as no behavior change. Model declarations and deterministic validation are listed separately.
 
-### M14 · P1（度量）：自动算出来的“已修复”不是实际修复
+### M14 · P1 (metric): An automatically computed "fixed" is not an actual fix
 
-- **是什么：** 旧交接 N18 建议用指纹消失和锚点变化计算 fix-through。M2 的两个探针提供了反例。
-- **问题：** 相同观测还可能来自引用失败、输出遗漏、模型版本变化、改名、删除义务或错误关闭。即使开发者真的补了测试，也不能据此证明测试能拦住原缺陷，或改变是 SpecGuard 引起的。
-- **最小修复：** 指标拆成 `still_observed`、`not_observed`、`reassessed_resolved`、`human_confirmed`；先测观测持续性，再对抽样补丁人工检查独立期望值与有效断言。因果收益另外通过对照实验估计。
-- **不修的后果：** 模型越容易漏报，修复率可能反而越好看，直接把优化方向带偏。
+- **What it is:** The old handoff N18 suggested computing fix-through from fingerprint disappearance and anchor change. The two probes of M2 provide counterexamples.
+- **Problem:** The same observation can also come from citation failure, output omission, a model version change, renaming, a deleted obligation, or wrongful closing. Even if the developer really added tests, it cannot be used to prove that the tests can stop the original defect, or that the change was caused by SpecGuard.
+- **Minimal fix:** Split the metric into `still_observed`, `not_observed`, `reassessed_resolved`, `human_confirmed`; first measure observation persistence, then manually check independent expectations and valid assertions on sampled patches. Causal benefit is estimated separately through controlled experiments.
+- **Consequence of not fixing:** The more easily the model misses, the better the fix rate may look, which directly pulls the optimization direction off course.
 
-**验收：** M2 的 unknown/摘要迁移场景不能增加确认修复数；没有再次验证的旧项只能是未观察到。artifact 保存转换原因和证据，不保存一个语义含糊的 `fixed: true`。
+**Acceptance:** The unknown/summary-migration scenarios of M2 must not increase the confirmed-fix count; old items without re-verification can only be not observed. The artifact saves the conversion reason and evidence, and does not save a semantically ambiguous `fixed: true`.
 
-### M15 · P2：重复机制、反复调参和运行失败会扭曲收益估计
+### M15 · P2: Repeated mechanisms, repeated tuning, and run failures distort the benefit estimate
 
-- **是什么：** 现有回放和 seeded 评测用于决定检索、prompt、默认 trace 策略。证据：`docs/competitors/head-to-head.md:41`、`eval/replay/holdout-pairs.json`、`eval/grade.js:158`。
-- **问题：** 两个 orpc 样本共享同一缺陷机制，旧 holdout 已用于选择 lean；评测汇总排除基础设施 error 后得到的是“成功运行条件下”的指标。若把同机制样本当独立泛化证据，或只展示成功分母，会高估实际收益。
-- **最小修复：** 按仓库/缺陷机制/时间分组留出新集，并分别报告模型检出、端到端交付、所有符合条件 PR 的有效提醒率；同时保留失败、被跳过和超时的分母。
-- **不修的后果：** 离线数字改善但生产采用无收益；继续在旧 holdout 上优化，只证明更适应旧样本。
+- **What it is:** The existing replay and seeded evaluations are used to decide retrieval, prompt, and the default trace strategy. Evidence: `docs/competitors/head-to-head.md:41`, `eval/replay/holdout-pairs.json`, `eval/grade.js:158`.
+- **Problem:** The two orpc samples share the same defect mechanism, and the old holdout has already been used to choose lean; the evaluation summary excludes infrastructure errors and thus obtains metrics "conditional on successful runs". If samples of the same mechanism are treated as independent generalization evidence, or only the successful denominator is shown, the actual benefit is overestimated.
+- **Minimal fix:** Hold out a new set grouped by repository/defect mechanism/time, and separately report model detection, end-to-end delivery, and the effective-alert rate over all eligible PRs; at the same time keep the denominators of failures, skips, and timeouts.
+- **Consequence of not fixing:** Offline numbers improve but there is no benefit in production adoption; continuing to optimize on the old holdout only proves better fit to the old samples.
 
-**验收：** 冻结一次未参与 prompt 调整的新集；同一机制不能横跨训练/验证分组。报告必须同时列总 PR 数、运行数、完成数、有效交付数、确认有价值数。
+**Acceptance:** Freeze a new set that did not take part in prompt tuning; the same mechanism cannot span the training/validation groups. The report must list the total number of PRs, runs, completed runs, effectively delivered, and confirmed valuable.
 
-## 4. 尚未证实、但值得用实验挖掘的盲点
+## 4. Blind spots not yet confirmed but worth digging into by experiment
 
-以下三项是**研究假设，不是已发现的生产缺陷**。它们补充旧 N 清单，不能与上面的确定性复现混用。
+The following three items are **research hypotheses, not discovered production defects**. They supplement the old N list and must not be mixed with the deterministic reproductions above.
 
-### M16 · 选择“更少报警”可能只是把困难情况推成 unknown
+### M16 · Choosing "fewer alerts" may just push hard cases into unknown
 
-- **是什么：** 输出校验降级能降低错误评论，但可能同时移除正确发现。
-- **具体假设：** 同样一组有缺陷 PR，新 prompt 报告更少并提高 precision，同时更多义务变成 unknown 或未列出，实际有效提醒数下降。
-- **最便宜实验：** 对固定、按机制分组的样本，记录 raw finding → 验证后 → inline/摘要的逐项流转；由盲评标记被过滤的真阳性。比较精度时同时展示检出数、拒绝判断比例和未评估比例。
-- **跳过的代价：** 团队可能把沉默当质量提升。只有确认真实误报下降、有效检出没有不可接受损失，才采用新门槛。
+- **What it is:** Output-validation downgrades can reduce wrong comments, but may also remove correct findings.
+- **Specific hypothesis:** On the same set of defective PRs, the new prompt reports fewer and raises precision, while more obligations become unknown or unlisted, and the number of effective alerts actually falls.
+- **Cheapest experiment:** For a fixed sample grouped by mechanism, record the item-by-item flow of raw finding → after validation → inline/summary; have a blind review mark the true positives that were filtered out. When comparing precision, also show the detection count, the proportion of refused judgments, and the proportion not assessed.
+- **Cost of skipping:** The team may take silence for a quality improvement. Adopt a new threshold only after confirming that real false positives dropped and effective detections did not suffer unacceptable loss.
 
-### M17 · 文件顺序和无关上下文可能改变检出
+### M17 · File order and irrelevant context may change detection
 
-- **是什么：** collector 有全局字节、时间和数量预算，prompt 也有内联上限。
-- **具体假设：** 将同一个有缺陷文件排到 diff 尾部，或在前面加入无关文档，会降低命中；即使两个版本都没有超过 collector 的 300 KiB 上限，模型仍可能在补读阶段停止。
-- **最便宜实验：** 创建保留同一语义的三组视图：改变上下文顺序、添加无关内容、代码拆分到不同文件；比较同一缺陷的命中与缺失阶段，并记录预算。
-- **跳过的代价：** 小 PR 的准确率无法解释真实 monorepo。先用实验定位是采集丢失还是模型注意力问题，再决定按模块分批，不能直接上多模型投票。
+- **What it is:** The collector has global byte, time, and count budgets, and the prompt also has an inline limit.
+- **Specific hypothesis:** Placing the same defective file at the tail of the diff, or adding irrelevant documents in front, lowers the hit rate; even if neither version exceeds the collector's 300 KiB cap, the model may still stop during the follow-up reading stage.
+- **Cheapest experiment:** Create three groups of views that keep the same semantics: changing context order, adding irrelevant content, and splitting code into different files; compare the hit and the stage of loss for the same defect, and record the budget.
+- **Cost of skipping:** The accuracy of small PRs cannot explain a real monorepo. First use experiments to locate whether it is collection loss or a model attention problem, and then decide on batching by module; multi-model voting cannot be applied directly.
 
-### M18 · 历史回放可能用了当时不存在的需求文本
+### M18 · Historical replay may have used requirement text that did not exist at the time
 
-- **是什么：** replay 要求使用 PR 当时的标题/正文，但元数据中的当前文本不自动等于当时版本。证据：`eval/replay/README.md` 的时间点要求，`eval/replay.js` 的 prBody 输入。
-- **具体假设：** 作者在 QA 找到问题后更新了 PR body，回放却把更新后的明确规则交给审查器，结果看似能提前检出。当前本轮未证明任何现有样本发生过这一点。
-- **最便宜实验：** 为新回放记录 requirement snapshot 时间、采集时间、版本可确认程度；无法还原历史正文时分别跑“代码和当时仓库内容”与“现存正文辅助”两组，后者单独标记为上限估计。
-- **跳过的代价：** 把事后知道答案的效果误当成 shift-left 能力。外部检索必须关闭或受时间范围控制，裁判可以看后续修复，被测 reviewer 不可以。
+- **What it is:** replay requires using the PR's title/body at that time, but the current text in the metadata is not automatically the version at that time. Evidence: the time-point requirement in `eval/replay/README.md`, and the prBody input of `eval/replay.js`.
+- **Specific hypothesis:** The author updated the PR body after QA found the problem, while replay handed the updated explicit rules to the reviewer, so it appears able to detect early. This round did not prove that any existing sample has this issue.
+- **Cheapest experiment:** For new replays, record the requirement snapshot time, collection time, and how confirmable the version is; when the historical body cannot be restored, run two groups, "code and the repository contents at the time" and "assisted by the existing body", with the latter marked separately as an upper-bound estimate.
+- **Cost of skipping:** Taking the effect of knowing the answer after the fact for shift-left capability. External retrieval must be turned off or bounded by a time range; the adjudicator may see the later fix, but the reviewer under test must not.
 
-## 5. 最小实施方案：四个工作包
+## 5. Minimal implementation plan: four work packages
 
-以下是规格，不是已经落地的功能；不新增数据库、服务端、dashboard 或模型编排框架。
+The following is a specification, not a feature that has already landed; no new database, server side, dashboard, or model orchestration framework is added.
 
-| 工作包 | 范围 | 最小交付 | 验收门槛 | 依赖 |
+| Work package | Scope | Minimal deliverable | Acceptance gate | Dependency |
 |---|---|---|---|---|
-| WP-A：结果状态与线程 | M1–M4、M7–M9 | 配置接线、明确完整性、保守的线程状态更新、发布故障回退 | 全部相关故障探针转为安全预期，既有测试通过 | 无组织信息依赖 |
-| WP-B：需求与版本 | M5、M6、M11 | 修正 alignment 契约，区分 diff/规范基线，定义输入版本与刷新方式 | PR-only 五组契约通过，基线前进仍对齐，变更需求不会误用缓存 | WP-A 的运行状态 |
-| WP-C：可核对的度量 | M10、M12–M15 | 来源歧义处理、明确评分门槛、阶段账本、最小 JSON artifact | 能解释每条发现在哪里丢失；未观察到不等于修复 | WP-A、WP-B |
-| WP-D：真实采用实验 | M16–M18、旧 N 的生产引擎/到达时间/评论噪声 | 冻结样本、盲评、新鲜真实 PR 的对照观察 | 能回答有效提醒、开发者处理成本和运行可靠性 | 前三包，真实仓库访问 |
+| WP-A: result status and threads | M1–M4, M7–M9 | Configuration wiring, explicit completeness, conservative thread status updates, publishing-failure fallback | All related fault probes turn into safe expectations, and existing tests pass | No organizational information dependency |
+| WP-B: requirements and versions | M5, M6, M11 | Fix the alignment contract, distinguish the diff/specification baselines, define input versions and refresh method | The five PR-only contract groups pass, baseline advance still aligns, and a changed requirement does not wrongly use the cache | Run status from WP-A |
+| WP-C: verifiable metrics | M10, M12–M15 | Source-ambiguity handling, explicit scoring gate, stage ledger, minimal JSON artifact | Can explain where each finding was lost; not observed does not equal fixed | WP-A, WP-B |
+| WP-D: real adoption experiment | M16–M18, the old N's production engine/arrival time/comment noise | Frozen sample, blind review, controlled observation of fresh real PRs | Can answer effective alerts, developer handling cost, and run reliability | The first three packages, real repository access |
 
-**执行顺序：** 先 WP-A；WP-B 优先修 prompt 冲突与基线坐标，再做缓存。不要为了缓存先引入整套需求同步服务。WP-C 的可观测性可从本地文件开始；WP-D 需要用户提供真实样本与采用场景，不能用离线模拟冒充完成。
+**Execution order:** WP-A first; WP-B first fixes the prompt conflict and baseline coordinates, then does caching. Do not introduce a whole requirements-sync service first for the sake of caching. WP-C's observability can start from local files; WP-D needs the user to provide real samples and adoption scenarios, and offline simulation cannot pass for completion.
 
-### 5.1 运行状态建议
+### 5.1 Run status recommendation
 
-把下面三个维度分别记录，避免一个 `success` 同时承担三种含义：
+Record the following three dimensions separately, to avoid one `success` carrying three meanings:
 
-| 维度 | 最小取值示例 | 规则 |
+| Dimension | Minimal value examples | Rule |
 |---|---|---|
-| 分析执行 | complete / partial / failed | JSON 能解析不代表执行成功；engine 状态和 collector 限制均参与判断 |
-| 证据结论 | covered / gap / unknown / needs_human | 单个义务的结论；不替代整体完成状态 |
-| 交付 | delivered / summary_only / failed / superseded | GitHub 发布结果；与分析是否完成分开 |
+| Analysis execution | complete / partial / failed | JSON parsing does not mean successful execution; engine status and collector limitations both take part in the judgment |
+| Evidence conclusion | covered / gap / unknown / needs_human | The conclusion for a single obligation; does not replace the overall completion status |
+| Delivery | delivered / summary_only / failed / superseded | The result of GitHub publishing; separate from whether the analysis completed |
 
-这些字段优先放在运行元数据里，不必一次修改全部模型输出 schema。先复用已经存在的状态与限制记录，统一消费；只有实际缺失的信息才新增字段。
+These fields are preferably placed in the run metadata, without needing to change all model output schemas at once. First reuse the existing status and limitation records and consume them uniformly; add fields only for information that is actually missing.
 
-不变量：unknown 不能证明已修复；未确认当前版本不能覆盖现有报告；被模型省略的需求不能从清单消失；发布失败不能抹掉有效分析；每条“已确认”的表述都有对应证据类型。
+Invariants: unknown cannot prove fixed; an unconfirmed current version cannot overwrite an existing report; a requirement omitted by the model cannot vanish from the list; a publishing failure cannot erase a valid analysis; every "confirmed" statement has a corresponding evidence type.
 
-### 5.2 最小 artifact 规格
+### 5.2 Minimal artifact specification
 
-每次运行一个经过筛选的 JSON，建议包含：
+One filtered JSON per run, recommended to contain:
 
-- `schema_version`、`run_id`、PR 号、HEAD、diff base、规范 base、Action/skill 版本与配置摘要。
-- 引擎和请求模型；实际路由模型未知时写 null，不能把 `auto` 当具体模型版本。
-- 来源摘要与采集时间、采集限制、分析/交付状态、开始/结束时间。
-- 各阶段数量：候选、已采集、已评估义务、unknown、raw findings、验证保留、过滤原因、已发布和仅摘要。
-- 发现的稳定标识、前后状态、变化原因、证据路径；“修复确认者”和确认依据可为空。
-- Token/花费有观测才填；缺数据填 null，不用 0。缓存 token 与计费 token 不混为一谈。
+- `schema_version`, `run_id`, PR number, HEAD, diff base, specification base, Action/skill versions, and a configuration digest.
+- The engine and requested model; write null when the actually routed model is unknown, and do not treat `auto` as a concrete model version.
+- Source digest and collection time, collection limitations, analysis/delivery status, start/end times.
+- Counts per stage: candidates, collected, evaluated obligations, unknown, raw findings, kept after validation, filter reasons, published, and summary-only.
+- Stable identifiers of findings, before/after states, reasons for change, evidence paths; "fix confirmer" and the basis of confirmation may be empty.
+- Fill Token/spend only when observed; fill null when data is missing, not 0. Cached tokens and billed tokens are not conflated.
 
-**不直接上传整份 `.specguard-ctx` 作为通用产品数据。** 当前 dogfood 会上传它，但其中包含原始 PR/issue 文本和引擎输出；通用运行统计只需要上述最小字段。需要原文排查时采用显式诊断产物，并明确存储位置、权限和保留期；不新增外部遥测服务。
+**Do not directly upload the whole `.specguard-ctx` as general product data.** The current dogfood uploads it, but it contains raw PR/issue text and engine output; general run statistics need only the minimal fields above. When the raw text is needed for troubleshooting, use an explicit diagnostic artifact, with the storage location, permissions, and retention period stated clearly; no external telemetry service is added.
 
-## 6. 验收与 pilot：怎样证明优化有价值
+## 6. Acceptance and pilot: how to prove the optimization has value
 
-### 6.1 先做低成本的确定性验收
+### 6.1 First do low-cost deterministic acceptance
 
-| 场景 | 正确结果 |
+| Scenario | Correct result |
 |---|---|
-| input `resolve_stale=false` | 0 次自动解决 |
-| 证据引用失效/需求不可读 | unknown/partial 可见；旧项保留 |
-| trace 内部上限触发 | 不依赖模型复述，摘要仍显示限制 |
-| engine 超时但 JSON 完整 | 部分结果可用，运行未完成 |
-| PR 有 AC、仓库无 spec | requirement alignment 正常评估 |
-| 相同 HEAD 下需求改变 | 不命中旧需求结果缓存 |
-| 不同 bot 复制 marker | 不触发跳过或线程操作 |
-| 无法重新确认 HEAD | 保留本次结果，不覆盖当前 PR 报告 |
-| 去重列表 API 失败 | 有降级交付，不静默丢失 |
-| 两来源同名 check | 歧义显式可见，不能默认 passed |
-| base 前进造成插行 | blame 和需求比较使用正确 diff 基线 |
-| 一命中加一误报 | 零误报质量门槛失败 |
+| input `resolve_stale=false` | 0 automatic resolves |
+| Evidence citation invalid / requirement unreadable | unknown/partial visible; old items kept |
+| Internal trace cap triggered | Does not rely on the model restating it; the summary still shows the limitation |
+| Engine timeout but JSON complete | Partial results usable, run not complete |
+| PR has AC, repository has no spec | requirement alignment is evaluated normally |
+| Requirement changes under the same HEAD | Does not hit the old requirement result cache |
+| A different bot copies the marker | Does not trigger a skip or thread operations |
+| HEAD cannot be reconfirmed | Keep this result, do not overwrite the current PR report |
+| Dedup list API fails | Degraded delivery, not silent loss |
+| Two sources with the same check name | Ambiguity is explicitly visible, and cannot default to passed |
+| Base advance causes line insertions | blame and requirement comparison use the correct diff baseline |
+| One hit plus one false positive | The zero-false-positive quality gate fails |
 
-### 6.2 模型实验只回答一个变量
+### 6.2 A model experiment answers only one variable
 
-第一组：修复 M5 前后，用同一批 PR-only/issue-only 用例比较，保持模型、预算、其他 prompt 相同。第二组：`trace off` 与拟议“强信号开启”策略做成配对对照；无 spec、有规范散文、有显式 AC/spec 三层分别报告。
+Group one: before and after fixing M5, compare using the same batch of PR-only/issue-only cases, keeping the model, budget, and other prompts the same. Group two: make `trace off` and the proposed "strong-signal on" strategy into a paired comparison; report the three layers separately — no spec, specification prose, and explicit AC/spec.
 
-不能把修 prompt、换模型、加预算、改 trace 默认值同时提交后，将所有提升归因于追溯。诊断性变体用于找到机制，最终效果必须在未参与调参的新样本上复核。
+One cannot submit prompt fixes, a model change, a budget increase, and a trace default change all at once and then attribute all the gains to tracing. Diagnostic variants are used to find the mechanism, and the final effect must be rechecked on new samples that did not take part in tuning.
 
-### 6.3 生产试点按 PR 和缺陷机制统计
+### 6.3 The production pilot counts by PR and defect mechanism
 
-建议先选一个愿意反馈的真实仓库、小规模 shadow 运行观察可靠性，再选择受控的可见评论试点。2–4 周是起始观察窗口建议，不是到期即可下结论；样本量不足时延长或报告证据不足。
+It is recommended to first pick a real repository willing to give feedback, observe reliability with a small-scale shadow run, and then choose a controlled visible-comment pilot. 2–4 weeks is a suggested starting observation window, not a point at which a conclusion can be drawn when it expires; when the sample is insufficient, extend or report insufficient evidence.
 
-| 指标 | 分母/定义 | 防误读 |
+| Metric | Denominator/definition | Guard against misreading |
 |---|---|---|
-| 可用运行率 | 完成分析并可访问结果的 PR / 符合条件 PR | 计入运行失败、权限问题和超时 |
-| 有效提醒率 | 人工确认有价值且及时送达的 PR / 符合条件 PR | 不用只对成功运行计算的 precision 代替 |
-| 检出与误报 | 按缺陷机制统计，inline 和摘要分别列 | 同机制重复不当成独立泛化样本 |
-| 修复确认 | 有明确变更和复核证据的发现 / 被评估发现 | 未观察到、自动 resolved 不算确认 |
-| 反馈时间 | 可审查输入就绪到有效结果可见 | 同时记录合并/QA 开始时间，区分早到与晚到 |
-| 开发者成本 | 读评论、验证和驳回所需时间 | 评论数只是代理指标 |
-| 推送成本 | 每个 PR 的运行次数、耗时、可获得的计费数据 | 限流/并发取消也要计入 |
+| Usable-run rate | PRs whose analysis completed and whose results are accessible / eligible PRs | Counts run failures, permission problems, and timeouts |
+| Effective-alert rate | PRs with a human-confirmed valuable and timely delivered alert / eligible PRs | Do not substitute precision computed only over successful runs |
+| Detections and false positives | Counted by defect mechanism, with inline and summary listed separately | Repeats of the same mechanism are not treated as independent generalization samples |
+| Fix confirmation | Findings with explicit change and recheck evidence / assessed findings | Not observed and auto-resolved do not count as confirmation |
+| Feedback time | From reviewable input being ready to a valid result being visible | Also record the merge/QA start time, to distinguish early from late arrival |
+| Developer cost | Time needed to read comments, verify, and reject | The comment count is only a proxy metric |
+| Push cost | Runs, elapsed time, and obtainable billing data per PR | Rate limiting/concurrency cancellation must also be counted |
 
-为判断 shift-left 的因果收益，可按 PR 在相近风险层分配可见建议与 shadow 对照，或按团队分阶段启用；记录原有 CI、CCR 和人工 review 是否同时发现。不能把“后来修了”自动归因于 SpecGuard，也不能把 PR merge 时间变化全部归因于它。
+To judge the causal benefit of shift-left, visible suggestions and a shadow control can be assigned by PR within similar risk strata, or enabled in phases by team; record whether existing CI, CCR, and human review also found the issue. "Fixed later" cannot be automatically attributed to SpecGuard, and changes in PR merge time cannot all be attributed to it either.
 
-有效性门槛应由团队对漏报和误报成本的接受程度决定。旧报告中的 80%/90%、10%/40% 都是拟议决策值，不是普适证明；必须同时展示样本数、分组与不确定性。
+The effectiveness threshold should be decided by the team's acceptance of the costs of misses and false positives. The 80%/90% and 10%/40% in the old report are proposed decision values, not universal proof; sample counts, grouping, and uncertainty must be shown at the same time.
 
-## 7. 暂缓的优化，以及避免把优化变成新缺陷
+## 7. Deferred optimizations, and avoiding turning optimizations into new defects
 
-- **增量审查：** 可以减少重复成本，但“只审上次之后的 diff”会漏掉由新规范、新需求、共享 helper 或测试删除影响的未修改行为。先确定失效依赖，不能把代码没改等同于审查输入没改。
-- **调高 max_comments：** 当前 skill 要求先完整分析再限制交付。若调高评论数才提高检出，说明模型仍被展示预算影响；应先测分析与交付是否真正解耦。
-- **多模型投票：** 在 M5 这样的契约冲突下，多次调用只会重复同一问题；先修确定性路径，再按分歧样本决定是否值得复核。
-- **向量检索、全仓索引和 dashboard：** 尚无证据表明它们是上述失败的瓶颈。先保存阶段丢失原因，再按实际失败分布决定。
-- **硬性 merge gate：** 当前 incomplete、身份与交付语义尚未闭合，继续 advisory。改善可信度不要求立刻增加阻断能力。
+- **Incremental review:** It can reduce repeated cost, but "review only the diff since last time" would miss unmodified behavior affected by new specifications, new requirements, shared helpers, or deleted tests. First determine the invalidating dependencies; unchanged code cannot be equated with unchanged review inputs.
+- **Raising max_comments:** The current skill requires a full analysis first and then limiting delivery. If detection improves only when the comment count is raised, the model is still affected by the display budget; first test whether analysis and delivery are truly decoupled.
+- **Multi-model voting:** Under a contract conflict like M5, multiple calls only repeat the same problem; fix the deterministic path first, then decide by disagreement samples whether a recheck is worthwhile.
+- **Vector retrieval, whole-repository indexing, and dashboards:** There is no evidence yet that they are the bottleneck of the failures above. First save the reasons for stage losses, then decide according to the actual failure distribution.
+- **Hard merge gate:** Currently the incomplete, identity, and delivery semantics are not yet closed, so stay advisory. Improving credibility does not require adding blocking capability immediately.
 
-## 8. 未检查与剩余未知
+## 8. Not checked and remaining unknowns
 
-未执行：真实 Copilot/Claude 新版生产流程、组织计费、真实 GitHub 权限/重试/线程操作、外部仓库完整 checkout、Jira/ADO 数据、实际模型读取日志、真实修复与开发者耗时。没有对外部研究数字或软件当前版本做新的联网核验，本报告不依赖它们作结论。
+Not performed: real Copilot/Claude new-version production flows, organizational billing, real GitHub permissions/retries/thread operations, a full checkout of external repositories, Jira/ADO data, actual model read logs, real fixes and developer time. No new online verification was done of external research numbers or the current versions of software, and this report does not rely on them for conclusions.
 
-重点阅读了高代价主路径、评测入口和相关测试；没有逐一重读全部 fixture、全部研究材料、所有评测生成器。没有本轮可支撑的删行数或依赖删除估计，因此不虚报瘦身收益。
+The high-cost main path, the evaluation entry points, and related tests were read closely; not all fixtures, all research material, or all evaluation generators were re-read one by one. There is no deleted-line count or dependency-removal estimate that this round can support, so slimming benefits are not overstated.
 
-决定试点策略仍需要三类信息：需求主要在哪里；QA 在 PR preview 还是合并后介入；可使用哪个真实仓库和生产引擎。这些未知不妨碍先实施 WP-A 和 WP-B 的确定性修复。
+Deciding the pilot strategy still needs three kinds of information: where the requirements mainly live; whether QA intervenes at PR preview or after merge; and which real repository and production engine can be used. These unknowns do not prevent implementing the deterministic fixes of WP-A and WP-B first.
 
-**Verdict：先让每个结论都正确表达“知道什么、没看到什么、是否仍有效”，再追求发现更多问题。WP-A 和 M5/M11 是最先值得实施的部分。**
+**Verdict: first make every conclusion correctly express "what is known, what was not seen, and whether it is still valid", and only then pursue finding more problems. WP-A and M5/M11 are the parts most worth implementing first.**

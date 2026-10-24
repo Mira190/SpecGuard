@@ -1,169 +1,169 @@
-# SpecGuard 目标完成度评估：PR 左移、全仓 audit 与 unknown unknown（2026-10-17）
+# SpecGuard Goal Completion Assessment: PR Shift-Left, Whole-Repo Audit, and Unknown Unknown (2026-10-17)
 
-基线：main `d3365c0` 及其后合入的 PR（见文末清单）。所有数字都来自本日真实运行、离线可复跑的评测集或人工标注，附运行 ID 或文件位置。**推算值与实测值分开标注，未测的明确写“未测”。**
+Baseline: main `d3365c0` and the PRs merged after it (see the list at the end). All numbers come from real runs of the day, offline reproducible eval sets, or human labelling, with run IDs or file locations attached. **Inferred values and measured values are labelled separately; anything unmeasured is explicitly written "not measured".**
 
-## 0. 结论
+## 0. Conclusion
 
-| 维度 | 判断 | 关键证据 |
+| Dimension | Judgment | Key evidence |
 |---|---|---|
-| PR 时左移（主路径） | **已在受控样本上证明有效** | Kite 10 个种子 PR 首屏检出 10/10，额外噪音 1 条，约 $0.005/PR、约 40 秒（小型种子 PR；SpecGuard 自身近期 PR 约 $0.02–$0.12/次，见 §2.1） |
-| 运行可信（失败不伪装成功） | **基本达成** | 配置失败一律红灯；失败重跑不覆盖已有结果；状态只表示执行是否完成 |
-| 全仓 audit 触达与成本 | **unit 触达 100%，但默认设置下只审了约 45% 的分段；运行时准入是杠杆** | nest 每次审查 7→40 个 unit，约 $0.03/次；漏斗数字可对账；不再卡死。触达 43/43 个 unit ≠ 每个分段/测试都被看到：默认 $1 在 130 个 unit 分段中只审了 58 个（约 45%），72 个因最坏情况预检未到达；13 个 unit 仅部分装入测试 |
-| 全仓 audit 的发现质量 | **模型路径未达成；确定性信号路径部分达成** | 8 个已知缺口：haiku 0/8（早期配置）、默认设置 3/8（#255/#256 之后）、normal tier 2/8（$1.91/次）；新增确定性静态信号（#253，无额外模型成本）生成 6/8，但当时可见的只有 3/8（20 行上限被“未被引用的导出”占满）；#263（按线索类型轮询的上限 + 边界线索）之后可见 6/8（Kite run 39012216164，生成 7/8）；当前 main 见 §3.3 |
-| 需求↔代码↔测试检索 | **大幅改善，可复测** | 需求→代码 MRR 0.444→0.750；代码→测试 Hit@3 4/24→20/24（剔除单个高贡献文件后 14/24）|
-| 价值计量（是否真的左移） | **口径已就绪并开始产出，样本未就绪** | fix-through、delivered recall、盲标对齐同一 ID；#248 的真实运行首次记录到 1 条 addressed；尚无真人作者样本 |
+| Shift-left at PR time (main path) | **Proven effective on controlled samples** | Kite's 10 seeded PRs detected 10/10 on the first screen, 1 extra noise item, about $0.005/PR, about 40 seconds (small seeded PRs; SpecGuard's own recent PRs are about $0.02–$0.12 per run, see §2.1) |
+| Run trustworthiness (failures do not masquerade as success) | **Largely achieved** | Configuration failures are always red; a failed rerun does not overwrite existing results; status only indicates whether execution completed |
+| Whole-repo audit reach and cost | **unit reach 100%, but under default settings only about 45% of segments were reviewed; runtime admission is the lever** | nest reviews 7→40 units per run, about $0.03/run; the funnel numbers reconcile; no more hangs. Reaching 43/43 units ≠ every segment/test was seen: the default $1 reviewed only 58 of 130 unit segments (about 45%), 72 were not reached due to worst-case pre-checks; 13 units had their tests only partly loaded |
+| Whole-repo audit finding quality | **Model path not achieved; deterministic signal path partly achieved** | 8 known gaps: haiku 0/8 (early configuration), default settings 3/8 (after #255/#256), normal tier 2/8 ($1.91/run); the newly added deterministic static signals (#253, no extra model cost) generated 6/8, but only 3/8 were visible at the time (the 20-row cap was filled by "unreferenced exports"); after #263 (cap by round-robin over clue types + boundary clues) 6/8 are visible (Kite run 39012216164, 7/8 generated); for current main see §3.3 |
+| Requirement ↔ code ↔ test retrieval | **Greatly improved, re-testable** | requirement→code MRR 0.444→0.750; code→test Hit@3 4/24→20/24 (14/24 after removing the single high-contribution file) |
+| Value measurement (whether it really shifts left) | **Definitions are ready and starting to produce output, samples are not ready** | fix-through, delivered recall, and blind labels align on the same ID; the real run of #248 recorded the first 1 addressed; there are no human-author samples yet |
 
-一句话：**PR 模式已经能在合并前把已知类型的问题可靠地送到作者面前；全仓 audit 现在跑得动、算得清，但让模型在没有 diff 的情况下“推断测试缺失”几乎无效（种子召回 0–2/8），真正有效的是确定性事实（未被任何测试引用的导出、只断言真值的测试、边界常量，当前 main 可见 6/8，无额外模型成本）。目标完成度大约在“试点可用、尚未证明团队收益”。**
+In one sentence: **PR mode can already reliably put known types of problems in front of the author before merge; the whole-repo audit now runs and its accounts reconcile, but having the model "infer missing tests" without a diff is almost ineffective (seeded recall 0–2/8), and what really works is deterministic facts (exports referenced by no test, tests that only assert truthiness, boundary constants; on current main 6/8 are visible with no extra model cost). Goal completion is roughly at "usable as a pilot, team benefit not yet proven".**
 
-## 1. 目标回顾（按 2026-10-13 的约定）
+## 1. Goal review (per the 2026-10-13 agreement)
 
-| 目标 | 当前状态 | 证据 / 缺口 |
+| Goal | Current status | Evidence / gap |
 |---|---|---|
-| 需求可来自 PR 或仓库文档，SpecGuard 自行发现 | **达成** | trace 自动发现文档；#229 来源标签规范化；#232 链接坏了不丢缺口；#238 scan_paths 不再挡住中央 docs |
-| “编码规范”= 仓库 instruction 文件 + lint/format 检查结果 | **实现了，真实运行未专门验收** | 规则在代码里；本日没有一次带 instruction 文件违规的真实 PR 验证（种子集不含此类） |
-| QA 在 PR Action 中每次 push 运行 | **达成** | Kite 与 SpecGuard 每个 PR 每次 push 都跑；head marker 复用同一 head 的结论（#243） |
-| 试点仓库 Kite | **达成** | 10 个种子 PR + 1 个种子 scan 分支；所有者已更新 Kite 的密钥 |
-| 引擎：公司默认 Copilot PAT，Claude 作为可插拔引擎 | **Claude 路径验证充分，Copilot 路径本日未运行** | 所有真实运行均为 claude-haiku-5-5；Copilot 的配置失败分类（#222）有单测，无真实运行 |
-| 外部仓库手动审查入口 | **公开仓库达成，私有仓库未通** | nest/TypeScript 多次成功；私有 Kite 的手动扫描因无 PAT/App 读不到 |
+| Requirements can come from the PR or repository documents, and SpecGuard discovers them itself | **Achieved** | trace auto-discovers documents; #229 normalizes source labels; #232 broken links do not drop gaps; #238 scan_paths no longer blocks the central docs |
+| "Coding standard" = repository instruction files + lint/format check results | **Implemented, not specifically accepted in real runs** | The rules are in the code; today there was no real PR validation with an instruction-file violation (the seed set contains none) |
+| QA runs in the PR Action on every push | **Achieved** | Kite and SpecGuard run on every push of every PR; the head marker reuses the conclusion for the same head (#243) |
+| Pilot repository Kite | **Achieved** | 10 seeded PRs + 1 seeded scan branch; the owner has updated Kite's secrets |
+| Engine: company default Copilot PAT, Claude as a pluggable engine | **Claude path sufficiently verified, Copilot path not run today** | All real runs used claude-haiku-5-5; Copilot's configuration-failure classification (#222) has unit tests but no real run |
+| Manual review entry for external repositories | **Public repositories achieved, private repositories not working** | nest/TypeScript succeeded multiple times; the manual scan of private Kite cannot read without a PAT/App |
 
-## 2. PR 时左移
+## 2. Shift-left at PR time
 
-### 2.1 已证明的
+### 2.1 What has been proven
 
-- **检出：** Kite 种子 #10–#19（5 个单测类、5 个需求漂移类），新构建首屏 10/10（旧构建 9/10）。#10“删除大小写不敏感重名断言”从只在 Details 的低置信升为首屏标题；#14 要求的是 `128*1048576` 与 `-1` 两侧独立断言，而不是复用常量。
-- **噪音：** 10 个 PR 共 2 条额外发现，1 条合理、1 条噪音。
-- **成本与时延：** 约 $0.005/PR 来自 Kite 的小型种子 PR；SpecGuard 近期 dogfood PR 约 $0.02–$0.12/次（非随机示例：#248 $0.12、#249 $0.02、#251 $0.02），两者都要写明。Kite 摘要中位约 40 秒，SpecGuard 自身约 60 秒。
-- **闭环实例：** SpecGuard #224 的机器人发现后 32 秒补测、CI、合入；#233 之后此类修复能被计量。
+- **Detection:** Kite seeds #10–#19 (5 unit-test types, 5 requirement-drift types), the new build detected 10/10 on the first screen (old build 9/10). #10 "deleted the case-insensitive duplicate-name assertion" was promoted from low confidence in Details only to a first-screen title; what #14 requires is independent assertions on both sides, `128*1048576` and `-1`, rather than reusing the constant.
+- **Noise:** 10 PRs had 2 extra findings in total, 1 reasonable and 1 noise.
+- **Cost and latency:** about $0.005/PR comes from Kite's small seeded PRs; SpecGuard's recent dogfood PRs are about $0.02–$0.12 per run (non-random examples: #248 $0.12, #249 $0.02, #251 $0.02), and both must be stated. Kite's summary median is about 40 seconds, SpecGuard's own about 60 seconds.
+- **Closed-loop example:** after the bot's finding on SpecGuard #224, the test was added, CI passed, and it merged 32 seconds later; after #233 such fixes can be measured.
 
-### 2.2 本日修掉的、会让左移失效的问题
+### 2.2 Problems fixed today that would have made shift-left ineffective
 
-| 问题 | 后果 | 修复 |
+| Problem | Consequence | Fix |
 |---|---|---|
-| Anthropic key 失效 19 个 PR 全绿 | 用户以为审过，其实没跑 | #222、#225：配置失败一律红灯 |
-| 失败重跑覆盖有效结果 | 同一 commit 的发现从 PR 上消失 | #228 |
-| “请补测试”其实测试已存在 | 作者被错误要求 | #229、#232 |
-| 大测试文件只留文件头 | PR 自己新增的测试看不到 | #234 按 diff hunk 切片 |
-| 快速档=incomplete | 状态行永远⚠️，失去信息 | #243 |
-| 敏感文件 diff 进 prompt | 外泄风险 | #223、#226 |
+| Anthropic key invalid, 19 PRs all green | Users thought it was reviewed, but it never ran | #222, #225: configuration failures are always red |
+| A failed rerun overwrote valid results | Findings for the same commit disappeared from the PR | #228 |
+| "Please add a test" when the test already exists | The author was wrongly asked | #229, #232 |
+| Large test files kept only the file header | Tests newly added by the PR itself could not be seen | #234 slices by diff hunk |
+| Fast tier = incomplete | The status line was always ⚠️, losing information | #243 |
+| Sensitive file diffs entering the prompt | Exfiltration risk | #223, #226 |
 
-### 2.3 尚未证明的
+### 2.3 What has not been proven
 
-- **普通 PR 的召回率：** 种子都是“一个 PR 一个已知问题”的正样本，不能外推到普通 PR。
-- **PR 模式召回抽样（新）：** 对 SpecGuard 近期 10 个机器人零发现的 PR 做独立复审，4/10 至少有 1 个真实漏报（95% 区间约 15%–70%）；抽样的每次运行都是快速档且 incomplete；四例中机器人自己的 “Not reviewed” 清单都点名了漏报所在位置——漏报主要来自被截断的上下文变为未知，另有 1 个检索 bug（名为 test-*.js 的源码文件被当作测试，已由 #265 修复）。样本小且非随机，只说明漏报真实存在。
-- **真人采用：** 所有样本 PR 都由 agent 编写，没有真人作者处置数据，无法回答“团队 QA 返工是否减少”。
-- **模型波动：** 每个 PR 只跑一次，pass@1 的稳定性未测。
+- **Recall on ordinary PRs:** the seeds are all positive samples of "one PR, one known problem" and cannot be extrapolated to ordinary PRs.
+- **PR-mode recall sampling (new):** an independent re-review of 10 recent SpecGuard PRs where the bot had zero findings found at least 1 real miss in 4/10 (95% interval about 15%–70%); every sampled run was fast tier and incomplete; in all four cases the bot's own "Not reviewed" list named the location of the miss — misses mainly come from truncated context becoming unknown, plus 1 retrieval bug (a source file named test-*.js was treated as a test, fixed by #265). The sample is small and non-random, and only shows that misses are real.
+- **Human adoption:** all sample PRs were written by agents, there is no human author handling data, so "does team QA rework decrease" cannot be answered.
+- **Model variance:** each PR was run only once, and the pass@1 stability was not measured.
 
-## 3. 全仓 audit 的左移价值
+## 3. Shift-left value of the whole-repo audit
 
-### 3.1 能力已具备
+### 3.1 Capability is in place
 
-| 指标 | 第 1 次 | 现在 | 来源 |
+| Metric | 1st time | Now | Source |
 |---|---|---|---|
-| nest 每次审查 unit（完整+部分） | 7+0 | 30+10 | runs 38983359975 → 38991206203 |
-| TypeScript 每次审查 unit | 3+0 | 18+6 | runs 38983362780 → 38991208512 |
-| 每次成本 | $0.006 | $0.03–0.04 | usage.json |
-| 一轮全量所需次数（nest，推算） | ~145 | ~25 | 1015 / 40 |
-| TypeScript checkout | 3m56s | ~2m（blobless） | #230 |
+| nest units per run (full + partial) | 7+0 | 30+10 | runs 38983359975 → 38991206203 |
+| TypeScript units per run | 3+0 | 18+6 | runs 38983362780 → 38991208512 |
+| Cost per run | $0.006 | $0.03–0.04 | usage.json |
+| Runs needed for one full pass (nest, inferred) | ~145 | ~25 | 1015 / 40 |
+| TypeScript checkout | 3m56s | ~2m (blobless) | #230 |
 
-漏斗行可对账（eligible = inventoried + 超大 + 未达；selected = 完整 + 部分 + 未达预算），卡死与大 unit 不可见均已修（#231、#235、#237）。
+The funnel rows reconcile (eligible = inventoried + oversized + not reached; selected = full + partial + not reached for budget); the hangs and the invisibility of large units were both fixed (#231, #235, #237).
 
-### 3.2 价值尚未证明
+### 3.2 Value not yet proven
 
-- **精确率（人工标注）：** 第 3 次计入 11 条，有价值 1；第 4 次（门控与匹配修复后）计入 3 条，有价值 0；降为低置信的 8 条里有 1 条有价值（门控误伤 1 条）。
-- **两次标注对同一条结论不一致**（supplementalreferences.go 是否被 baseline 覆盖），说明单人单次标注本身有噪音。
-- **根因判断：** 成熟仓库真实单测缺口本就稀少，分母太小；继续加门控收益递减且会误伤。
-### 3.3 种子评测：召回率第一次被测出来
+- **Precision (human labelled):** the 3rd run counted 11 items, 1 valuable; the 4th run (after the gate and matching fixes) counted 3 items, 0 valuable; of the 8 downgraded to low confidence, 1 was valuable (the gate wrongly hurt 1).
+- **Two labelling passes disagreed on the same conclusion** (whether supplementalreferences.go is covered by the baseline), showing that single-person single-pass labelling is itself noisy.
+- **Root-cause judgment:** real unit-test gaps in mature repositories are scarce to begin with, the denominator is too small; adding more gates has diminishing returns and hurts valid findings.
+### 3.3 Seeded evaluation: recall is measured for the first time
 
-在 Kite 分支 `eval/seeded-scan-gaps-1017` 埋 8 个真实测试缺口（3 个整块删测试、3 个把值断言改成 `assert.ok`、2 个删边界用例），埋后 136 个测试仍全绿——普通 CI 发现不了。#252 允许不读写扫描状态的扫描在非默认分支运行（所有者 2026-10-17 选定方案 A）；一次覆盖全部 43 个 unit；对照分支来自 master。
+On the Kite branch `eval/seeded-scan-gaps-1017`, 8 real test gaps were planted (3 whole test blocks deleted, 3 value assertions changed to `assert.ok`, 2 boundary cases deleted); after planting, all 136 tests were still green, so ordinary CI cannot find them. #252 allows scans that do not read or write scan state to run on non-default branches (the owner chose option A on 2026-10-17); one run covers all 43 units; the control branch comes from master.
 
-| 方法 | 召回（8 个） | 计入精确率 | 成本/次 | 说明 |
+| Method | Recall (8) | Counted toward precision | Cost/run | Notes |
 |---|---|---|---|---|
-| haiku（fast tier，早期配置，#255 之前） | **0/8** | 0/1 | $0.45 | 6 个种子模型完整看到仍未报告 |
-| sonnet（normal tier） | **2/8**（种子 4、5） | 7/8（含 1 条重复） | $1.91 | 默认 $1 预算会悄悄只审 25/43 个 unit；需约 $6 才能一次覆盖 |
-| 确定性静态信号（#253） | 生成 **6/8**（种子 1–6）；可见仅 **3/8**（20 行上限被未引用导出占满） | 对照 master 的 18 条线索抽查 9 条全部属实 | 无额外模型成本（不是 $0 的运行） | 未被任何测试引用的导出 + 只断言真值的测试 |
-| 三者都未找到（#263 之前） | 种子 7、8 | — | — | 边界值（`<=` vs `<`）需要语义判断；#263 的边界线索之后种子 8 可见 |
-| **默认设置端到端（#255/#256 之后，main 9c08f80：haiku、$1；与上面 haiku 0/8 不是同一版本）** | 模型 3/8（种子 4、5、6），静态可见 2/8（种子 3、4；生成 6/8），**合计可见 4/8**（种子 3–6；已按该次运行 summary 逐项核对；更正：此前把生成的线索算作静态 6/8） | 5 条计入：3 个种子 + 1 重复 + 1 存疑，无明确误报 | $0.42 | 43/43 个 unit 被触达（按分段计覆盖见 §3.3 当前 main 结果；“30 完整”标签不准确）；20 行线索表被未引用导出占满 |
+| haiku (fast tier, early configuration, before #255) | **0/8** | 0/1 | $0.45 | 6 seeds were fully seen by the model and still not reported |
+| sonnet (normal tier) | **2/8** (seeds 4, 5) | 7/8 (including 1 duplicate) | $1.91 | The default $1 budget silently reviews only 25/43 units; about $6 is needed to cover them in one run |
+| Deterministic static signals (#253) | generated **6/8** (seeds 1–6); visible only **3/8** (the 20-row cap was filled by unreferenced exports) | 9 of 18 clues sampled against master were all true | No extra model cost (not a $0 run) | Exports referenced by no test + tests that only assert truthiness |
+| None of the three found (before #263) | Seeds 7, 8 | — | — | Boundary values (`<=` vs `<`) need semantic judgment; after #263's boundary clues seed 8 is visible |
+| **Default settings end-to-end (after #255/#256, main 9c08f80: haiku, $1; not the same version as the haiku 0/8 above)** | Model 3/8 (seeds 4, 5, 6), static visible 2/8 (seeds 3, 4; 6/8 generated), **total visible 4/8** (seeds 3–6; checked item by item against that run's summary; correction: previously the generated clues were counted as static 6/8) | 5 counted: 3 seeds + 1 duplicate + 1 doubtful, no clear false positive | $0.42 | 43/43 units reached (coverage by segment is in the §3.3 current-main results; the "30 full" label is inaccurate); the 20-row clue table was filled by unreferenced exports |
 
-**更正与后续（#263/#268）：** 此前“静态 6/8”统计的是生成的线索，用户可见的只有 3/8，因为 20 行上限被未被引用的导出占满。#263 把上限改为按线索类型轮询并加入边界线索后，Kite run 39012216164 上静态可见 6/8、生成 7/8。
+**Correction and follow-up (#263/#268):** the earlier "static 6/8" counted generated clues, and only 3/8 were visible to users, because the 20-row cap was filled by unreferenced exports. After #263 changed the cap to round-robin over clue types and added boundary clues, Kite run 39012216164 showed static visible 6/8 and generated 7/8.
 
-**当前 main 的结果（Kite run 39015026706，SpecGuard main `247c596`，默认输入：haiku、$1、max_units 60）：**
+**Results on current main (Kite run 39015026706, SpecGuard main `247c596`, default inputs: haiku, $1, max_units 60):**
 
-| 口径 | 可见召回 | 生成召回 | 说明 |
+| Measure | Visible recall | Generated recall | Notes |
 |---|---|---|---|
-| 模型 | 2/8（种子 4、5） | 2/8 | 另有 1 条非种子发现（electron/live.cjs） |
-| 静态 | 6/8（种子 2、3、4、5、6、8） | 7/8（缺种子 7） | 种子 1（moveCrop）已生成线索但未进入可见表；种子 7 无线索 |
-| 合计 | **6/8** | **7/8** | 种子 1、7 未送达 |
+| Model | 2/8 (seeds 4, 5) | 2/8 | Plus 1 non-seed finding (electron/live.cjs) |
+| Static | 6/8 (seeds 2, 3, 4, 5, 6, 8) | 7/8 (seed 7 missing) | Seed 1 (moveCrop) had a clue generated but did not enter the visible table; seed 7 had no clue |
+| Total | **6/8** | **7/8** | Seeds 1, 7 not delivered |
 
-成本 $0.45（7 次调用，5m43s）；43/43 个 unit 被触达，但按分段只审了 58/130（约 45%），72 段因最坏情况预检未到达（预算）。漏斗里的“30 reviewed whole”是误标：只要有一个分段被审的 unit 就被计为完整（例如 check-launch.cjs 只审了 6 段中的 2 段），修复进行中。
+Cost $0.45 (7 calls, 5m43s); 43/43 units were reached, but by segment only 58/130 (about 45%) were reviewed, and 72 segments were not reached because of the worst-case pre-check (budget). "30 reviewed whole" in the funnel is mislabelled: a unit with even one segment reviewed is counted as full (for example check-launch.cjs had only 2 of 6 segments reviewed); a fix is in progress.
 
-**N1 现已可见：** 默认 $1 下，预检按最坏情况预留，实际只花约 $0.43–0.45 就有大量 unit 分段从未被规划；运行时准入（按实际花费放行）是下一步（另一会话负责）。
+**N1 is now visible:** under the default $1, the pre-check reserves for the worst case, and with only about $0.43–0.45 actually spent many unit segments were never planned; runtime admission (admitting by actual spend) is the next step (owned by another session).
 
-**过程教训：** #255（读取全部分段）在 CI 与离线模拟下都通过，真实种子运行却显示默认设置覆盖从 30 降到 16（收集端预算估算漏算文档块调用）；其修复 #256 第一次真实运行又因声明顺序错误在引擎启动时崩溃，而 job 仍为绿色。两次都只被真实运行发现。现在扫描选择、预算和引擎入口相关改动必须先在 Kite 种子分支上真实运行再合并；内部异常（`internal`）一律红灯。
+**Process lesson:** #255 (read all segments) passed in CI and offline simulation, but the real seeded run showed default-settings coverage dropping from 30 to 16 (the collector-side budget estimate missed document-block calls); its fix #256 crashed at engine startup on its first real run because of a declaration-order error, while the job was still green. Both were found only by real runs. Now any change involving scan selection, budget, and engine entry points must be run for real on the Kite seeded branch before merging; internal exceptions (`internal`) are always red.
 
-**第一性原理解读：** PR 模式靠 diff 直接指出“删了这个断言”，所以 10/10；全仓没有 diff，模型必须从整体推断“缺了什么”，小模型几乎做不到，大模型也只多 2 个。**全仓 audit 的主力应是确定性事实，模型只用于事实无法判定的部分（边界、需求一致性）。** 另有 2 个种子落在大 unit 的第 2 段，**在 #255 之前的实现里**单次无状态运行永远读不到（当时是方法限制，不是模型限制）；#255 之后已读取全部分段，剩余限制应具体看实际 deferred/failed 的分段。
+**First-principles reading:** PR mode points straight at "this assertion was deleted" through the diff, hence 10/10; the whole repository has no diff, so the model must infer "what is missing" from the whole, which small models can hardly do and large models add only 2 more. **The mainstay of the whole-repo audit should be deterministic facts, with the model used only for what facts cannot decide (boundaries, requirement consistency).** Another 2 seeds fell in the 2nd segment of large units; **in the pre-#255 implementation** a single stateless run could never read them (a method limit at the time, not a model limit); after #255 all segments are read, and the remaining limits should be looked at concretely in the segments actually deferred/failed.
 
-**定位：** 全仓 audit 当前适合作为“确定性测试债务清单 + 周期性线索”，并把义务带回后续 PR；模型发现部分不应对外宣称质量。
+**Positioning:** the whole-repo audit is currently suited to being a "deterministic test-debt list + periodic clues", carrying obligations back into later PRs; the model-found part should not be advertised for quality externally.
 
-## 4. Unknown unknown：哪些盲区已经可见，哪些仍是盲区
+## 4. Unknown unknown: which blind spots are now visible, which remain blind spots
 
-“看不到的必须显示出来”是本项目的第一原则。本日把下列原来**静默**的损失变成了可见的行：
+"What cannot be seen must be shown" is this project's first principle. Today the following previously **silent** losses became visible rows:
 
-| 原来静默 | 现在显示为 |
+| Previously silent | Now shown as |
 |---|---|
-| 模型调用失败但 job 绿 | 红灯 + `(auth, HTTP 401)` 等类别 |
-| 多段扫描中途无额度 | 红灯，保留已完成部分 |
-| 敏感文件被排除 | “Not reviewed: N secret-like files” |
-| 测试装不下的 unit | “Reviewed with part of their tests (unsure)” |
-| 预算未覆盖的 unit | “not reached (budget)” |
-| 检索 top-3 之外的候选 | “N more candidates not shown” |
-| scan_paths 外的文档块 | “N document blocks skipped: evidence outside scan_paths” |
-| 大测试文件被截断 | pack-cut 与“context was cut”行 |
-| baseline 驱动的仓库 | 一次性说明所有 missing_test 已降级及原因 |
+| Model call failed but job green | Red + categories such as `(auth, HTTP 401)` |
+| Multi-segment scan ran out of quota midway | Red, completed parts retained |
+| Sensitive files excluded | "Not reviewed: N secret-like files" |
+| Units whose tests do not fit | "Reviewed with part of their tests (unsure)" |
+| Units not covered by budget | "not reached (budget)" |
+| Candidates outside retrieval top-3 | "N more candidates not shown" |
+| Document blocks outside scan_paths | "N document blocks skipped: evidence outside scan_paths" |
+| Large test files truncated | pack-cut and the "context was cut" row |
+| Baseline-driven repositories | A one-time note that all missing_test were downgraded, and why |
 
-**仍然是盲区（按对目标的影响排序）：**
+**Still blind spots (ranked by impact on the goal):**
 
-1. **真实召回率**：PR 模式没有无报警样本的独立复审；scan 模式只有一组 8 个种子（Kite），边界类缺口三种方法都找不到。这是当前最大的未知。
-2. **真人作者行为**：是否阅读、是否认同、是否修改；全部样本都是 agent 自写自审。
-3. **非 JS/TS 语言**：Go 的测试匹配、import 版本、baseline 体系只有粗略支持；Python 未测。
-4. **动态关系**：DI、事件、注册表、生成代码到生成器的映射；检索只能找到词面与一级 import。
-5. **单次运行的模型波动**：同一输入重跑结果是否一致，未测。
-6. **Copilot 引擎**：公司默认路径本日零真实运行。
-7. **编码规范检查**：instruction 文件 + lint 结果的真实违规场景未验收。
-8. **标注可靠性**：单人标注，未做双人独立标注与协调。
-9. **规模上限**：6000 文件 inventory 上限、512 KiB 文件上限、40 秒 trace 预算在更大仓库的表现只做了一次（TypeScript），未系统测。
-10. **hunk 标识符测试检索在 SpecGuard 自身 dogfood PR 上超时**：#264 的摘要写着 “search for changed identifiers ... failed or timed out”。这是 #260 之后才可见的问题，尚未修复。
-11. **摘要自相矛盾**：全分段运行的摘要里同时出现 “Only the first part of each unit under review was visible”，修复进行中。
-12. **输出内部不一致**：SpecGuard 摘要可能把某条需求列为 “Unconfirmed”，而同一评论又把它的义务标为已有证据（见 #264）。尚未修复。
+1. **True recall**: PR mode has no independent re-review of no-alert samples; scan mode has only one set of 8 seeds (Kite), and boundary-type gaps were found by none of the three methods. This is the biggest unknown at present.
+2. **Human author behavior**: whether they read, agree, or change; all samples are agent-written and agent-reviewed.
+3. **Non-JS/TS languages**: Go test matching, import versions, and the baseline system have only rough support; Python untested.
+4. **Dynamic relations**: DI, events, registries, mapping from generated code to generators; retrieval can only find lexical matches and first-level imports.
+5. **Model variance in a single run**: whether rerunning the same input gives consistent results was not measured.
+6. **Copilot engine**: the company default path had zero real runs today.
+7. **Coding standard checks**: real violation scenarios with instruction files + lint results are not accepted.
+8. **Labelling reliability**: single-person labelling, no independent two-person labelling and reconciliation.
+9. **Scale limits**: how the 6000-file inventory cap, the 512 KiB file cap, and the 40-second trace budget behave on larger repositories was tested only once (TypeScript), not systematically.
+10. **hunk-identifier test retrieval times out on SpecGuard's own dogfood PRs**: #264's summary says "search for changed identifiers ... failed or timed out". This problem became visible only after #260 and is not yet fixed.
+11. **Self-contradictory summary**: the summary of an all-segment run contains "Only the first part of each unit under review was visible" at the same time; a fix is in progress.
+12. **Internally inconsistent output**: SpecGuard's summary may list a requirement as "Unconfirmed" while the same comment marks its obligations as having evidence (see #264). Not yet fixed.
 
-## 5. 计量是否能回答“有没有左移”
+## 5. Can the metering answer "did it shift left"
 
-本日之前，核心价值指标 fix-through 在几乎所有真实运行中结构性为零（不完整运行整批丢弃、快速档一律降级、只追踪 inline）。现在：
+Before today, the core value metric fix-through was structurally zero in almost all real runs (incomplete runs discarded wholesale, fast tier always downgraded, only inline tracked). Now:
 
-- 按单条发现判定是否被处置，看不到的文件才算 not_observed（#233）。
-- summary-only 发现带标题进入盲标，与 fix-through 共用 ID，盲标表不暴露来源（#246）。
-- 评测区分 raw recall 与 delivered recall，后者与误报使用同一可行动集合；失败运行计入端到端分母（#245）。
-- 检索有版本化评测集：Recall@K、MRR、All-required（#247）。
-- 代码→测试候选读取 diff 自身改动的标识符（#249）：fastify 集 Hit@3 4/24→20/24、Recall@3 7%→52%、MRR 0.167→0.813；剔除贡献最大的 initial-config 后 Hit@3 仍为 4/24→14/24；在 SpecGuard 自身最近 10 个 PR 上，PR 自带测试进入前 3 的比例 16/18→17/18，平均候选数 4.05→4.29（未泛滥）。
-- 计量已开始产生真实数据：#248 的 dogfood 运行中，上一轮发现被记录为 addressed——此前同类修复（#224）记录为 0。
+- Whether each finding was handled is judged per finding, and only files that cannot be seen count as not_observed (#233).
+- summary-only findings enter blind labelling with a title, sharing the ID with fix-through, and the blind-label table does not expose the source (#246).
+- The evaluation distinguishes raw recall from delivered recall, the latter using the same actionable set as false positives; failed runs are counted in the end-to-end denominator (#245).
+- Retrieval has a versioned eval set: Recall@K, MRR, All-required (#247).
+- Code→test candidates read the identifiers changed by the diff itself (#249): fastify set Hit@3 4/24→20/24, Recall@3 7%→52%, MRR 0.167→0.813; after removing the biggest contributor initial-config Hit@3 is still 4/24→14/24; on SpecGuard's own latest 10 PRs, the share where the PR's own tests enter the top 3 went 16/18→17/18, and the average candidate count 4.05→4.29 (not flooding).
+- Metering has started to produce real data: in the dogfood run of #248, the previous round's finding was recorded as addressed — a similar earlier fix (#224) was recorded as 0.
 
-**缺的不只是样本：** 预注册门槛（precision ≥65%、fix-through ≥25% 等）需要真实作者的 PR，目前一条都没有；标签生命周期（#261：已解决的摘要发现、摘要→inline 提升不再丢标签）与执行覆盖口径一致（扫描分段账本 #264、pack-zero/rows #267）已合入。
+**What is lacking is more than samples:** the preregistered thresholds (precision ≥65%, fix-through ≥25%, etc.) need PRs from real authors, and there are currently none; the label lifecycle (#261: resolved summary findings, and summary→inline promotion no longer drops labels) and consistency of execution-coverage definitions (scan segment ledger #264, pack-zero/rows #267) have been merged.
 
-## 6. 下一步（按对目标的价值排序）
+## 6. Next steps (ranked by value to the goal)
 
-1. **边界类缺口**：三种方法都 0/2。离线研究：“命名常量比较”线索在成熟仓库上以 0–1 条线索即可命中种子 8；种子 7（两个动态操作数）无法确定性捕获，留给模型；线索已由 #263 合入（#268 补测试）。另：`context_pack_bytes` 两端不一致已由 #258 解决；预算预检比真实花费保守约 4 倍，积累几次 usage.json 后再校准。
-2. hunk 检索候选经 cover guard 误降真实缺口的风险（#249 的同字面量风险）已由 #251 合入修复。仍需在第二个外部仓库补检索用例，降低对 fastify 单仓的依赖。
-3. **PR 模式召回抽样**：已做首批 10 个（见 §2.3，4/10 有漏报），需扩大并含非 SpecGuard 仓库。
-4. **一次 Copilot 引擎真实运行**，确认公司默认路径没有退化。
-5. **编码规范真实验收**：在 Kite 放一个违反 instruction 文件和 lint 的 PR。
-6. **双人盲标**：对现有 25 条标注做第二人独立标注，测一致性。
-7. 有真人作者样本后，按预注册门槛出第一份周报。
+1. **Boundary-type gaps**: 0/2 for all three methods. Offline study: the "named constant comparison" clue hits seed 8 on mature repositories with 0–1 clues; seed 7 (two dynamic operands) cannot be captured deterministically and is left to the model; the clue was merged by #263 (#268 adds tests). Also: the inconsistency of `context_pack_bytes` between the two ends was resolved by #258; the budget pre-check is about 4 times more conservative than real spend, to be calibrated after accumulating several usage.json.
+2. The risk that hunk retrieval candidates wrongly downgrade real gaps through the cover guard (the same-literal risk of #249) was fixed by the merge of #251. Retrieval cases still need to be added on a second external repository, to reduce dependence on the single fastify repository.
+3. **PR-mode recall sampling**: the first batch of 10 is done (see §2.3, 4/10 had misses), and it needs to be expanded and include non-SpecGuard repositories.
+4. **One real run of the Copilot engine**, to confirm the company default path has not regressed.
+5. **Real acceptance of the coding standard**: put a PR in Kite that violates the instruction file and lint.
+6. **Two-person blind labelling**: have a second person independently label the existing 25 labels, to measure agreement.
+7. Once there are human author samples, produce the first weekly report against the preregistered thresholds.
 
-**进行中的下一步：**
+**Next steps in progress:**
 
-- U1（发现验证使用的是计划的而非实际执行的分段范围）、U2（负数/小数边界归一化）、U3（旧记录的 `precision_delivered` 为 null）、U4（缺失 usage 时必须保留最坏情况预留，阻塞 #275）正在另一会话修复。
-- 运行时预检 #275 的真实运行：未触达分段 72 → 15，花费 $0.44（Kite 39017602602），待 U4。
-- 单次评审切分方案：P0（共享分段身份）已基本由 #264/#274 完成；PR 模式下一个杠杆是 pack 内的证据保留（漏报可追溯到被截断的上下文），先度量，再决定是否做切分或并发。
+- U1 (finding validation uses the planned rather than the actually executed segment range), U2 (negative/decimal boundary normalization), U3 (`precision_delivered` of old records is null), U4 (the worst-case reserve must be kept when usage is missing, blocking #275) are being fixed in another session.
+- Real run of the runtime pre-check #275: unreached segments 72 → 15, spend $0.44 (Kite 39017602602), pending U4.
+- Single-review split plan: P0 (shared segment identity) is largely done by #264/#274; the next lever in PR mode is evidence retention inside the pack (misses are traceable to truncated context), measure first, then decide whether to do splitting or concurrency.
 
-## 附：本日合入（#218–#248）
+## Appendix: merged today (#218–#248)
 
-#218–#223 运行可信与安全；#224–#226 未知风险复查修复；#227–#235 证据协议、失败保留、召回、计量、上下文切片、扫描吞吐；#236–#242 文档与扫描措辞；#238–#241 scan_paths、检索、精度门控、测试匹配；#243 状态语义；#244 文档；#245–#247 评测口径与检索评测集；#248 收尾修复；#249 代码→测试 hunk 标识符检索；#250 本文初版；#251 cover guard 忽略 hunk 候选；#252 无状态扫描可用于非默认分支；#253 确定性静态信号；#254 本文种子结果；#255 无状态扫描读取全部分段与预算提示；#256 收集端与引擎预算一致、按分段记录丢弃、内部异常红灯；#259/#260 评测与收集修复；#261 标签生命周期；#263/#268 边界线索与测试；#264 扫描分段账本；#265 测试路径与删除 hunk；#267 pack-zero/rows。
+#218–#223 run trustworthiness and security; #224–#226 unknown-risk re-check fixes; #227–#235 evidence protocol, failure retention, recall, metering, context slicing, scan throughput; #236–#242 documentation and scan wording; #238–#241 scan_paths, retrieval, precision gate, test matching; #243 status semantics; #244 documentation; #245–#247 eval definitions and retrieval eval set; #248 wrap-up fixes; #249 code→test hunk identifier retrieval; #250 first version of this document; #251 cover guard ignores hunk candidates; #252 stateless scan usable on non-default branches; #253 deterministic static signals; #254 seeded results of this document; #255 stateless scan reads all segments and budget hints; #256 collector and engine budgets consistent, discards recorded per segment, internal exceptions red; #259/#260 eval and collection fixes; #261 label lifecycle; #263/#268 boundary clues and tests; #264 scan segment ledger; #265 test paths and deletion hunks; #267 pack-zero/rows.

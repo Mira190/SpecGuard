@@ -1,238 +1,238 @@
-# 全仓 unit-test audit、需求识别与大仓库 chunking 调研
+# Research on Whole-Repo Unit-Test Audit, Requirement Identification, and Chunking for Large Repositories
 
-What this repo does: SpecGuard 通过静态阅读需求、源码和测试，在 QA 前提示可行动的单元测试缺口。全仓 scan 要回答“哪些行为还缺可信证据”，PR review 要回答“本次变化新增或暴露了什么缺口”。本轮按 monorepo、多份需求文档、共享测试 helper、较大源码和受限模型上下文审查；只交付研究与反例，不修改运行时代码。
+What this repo does: SpecGuard statically reads requirements, source code, and tests to flag actionable unit-test gaps before QA. A whole-repo scan has to answer "which behaviors still lack credible evidence", while a PR review has to answer "what gaps did this change add or expose". This round reviewed monorepos, multiple requirement documents, shared test helpers, larger source files, and limited model context; it delivers only research and counterexamples and does not modify runtime code.
 
-日期：2026-10-16，Australia/Sydney。代码基线：`origin/main` **`ee1c15812bae4315f39ce7d5bf1bf7511ac58553`**；工作分支在此前文档提交 `c2f056f` 之后，运行时代码与该 main 相同。重新 fetch 确认基线；#198 最新 head 仍为 `c77841d`，本文引用它的结果来自[上一轮固定版本复验](full-repo-shift-left-audit-2026-10-16.md)，没有声称重新执行了 #198 的全部测试。
+Date: 2026-10-16, Australia/Sydney. Code baseline: `origin/main` **`ee1c15812bae4315f39ce7d5bf1bf7511ac58553`**; the working branch sits after the earlier documentation commit `c2f056f`, and its runtime code is identical to that main. The baseline was confirmed by re-fetching; the latest head of #198 is still `c77841d`, and the results cited here for it come from the [previous round's fixed-version re-verification](full-repo-shift-left-audit-2026-10-16.md), without claiming that all of #198's tests were re-run.
 
-## 1. 结论先行
+## 1. Conclusion First
 
-**大仓库需要可续跑的任务划分，但不应直接按固定行数切完就分别让模型下结论。** 一个最小审查任务要同时带上行为、适用需求、实现及依赖、相关断言与测试前置条件。缺其中一项应能留下 unknown 和可追踪原因；文件全读过、JSON 返回成功、运行次数足够，都不能替代这件事。
+**Large repositories need a resumable task partition, but should not simply be cut by a fixed number of lines with the model then drawing conclusions on each piece separately.** A minimal review task must carry the behavior, the applicable requirement, the implementation and its dependencies, and the relevant assertions and test preconditions together. When one of these is missing, an unknown with a traceable reason should be left behind; reading every file, a successful JSON return, or a sufficient number of runs cannot substitute for that.
 
-本次得到 **7 项新增的确认发现 F30–F36**，其中 F35 是已声明规模上限对 full-repo goal 的实证限制，F36 是已声明映射启发式在 monorepo 下的反例。另用真实 collector 产物补强此前 F28，并纠正原报告对 YAML 样本来源的描述。全部 8 个 probe 都不调用模型、不访问真实 GitHub API。
+This round yielded **7 new confirmed findings, F30–F36**; F35 is empirical evidence that a declared scale limit restricts the full-repo goal, and F36 is a counterexample to a declared mapping heuristic in monorepos. Real collector output was also used to reinforce the earlier F28, and to correct the original report's description of the source of the YAML sample. None of the 8 probes calls a model or accesses the real GitHub API.
 
-最值得优先处理的 unknown unknown 不在模型推理内部，而在三个容易被误认为已经完成的步骤：
+The unknown unknowns most worth handling first are not inside the model's reasoning, but in three steps that are easily mistaken for done:
 
-- 文档被发现，不代表其中所有真实需求进入候选集合。
-- 找到了测试文件，不代表它属于这个 package、实际约束这个行为，或它的 helper 仍有效。
-- 每个 chunk 都完成，不代表跨 chunk 的前置条件、契约和当前版本已经一起审过。
+- A document being discovered does not mean all the real requirements in it enter the candidate set.
+- Finding a test file does not mean it belongs to this package, actually constrains this behavior, or that its helpers are still valid.
+- Every chunk being completed does not mean the cross-chunk preconditions, contracts, and current version have been reviewed together.
 
-## 2. 外部研究支持什么，不支持什么
+## 2. What the External Research Supports, and What It Does Not
 
-以下只使用论文或项目官方文档。旧论文用于建立待检验假设，**不拿它们推断 2026 年某个模型的具体窗口、准确率或最优 chunk 大小**。
+Only papers or official project documentation are used below. The older papers are used to form hypotheses to be tested, **not to infer the specific window, accuracy, or optimal chunk size of any 2026 model**.
 
-| 一手来源 | 可以支持的判断 | 对 SpecGuard 的推论与限制 |
+| Primary source | Judgement it can support | Inference for SpecGuard and its limits |
 |---|---|---|
-| [Lost in the Middle，TACL 2024](https://aclanthology.org/2024.tacl-1.9/) | 所测 QA/检索任务中，证据位置影响模型使用长上下文的效果 | 不能把“装得下”当成“理解完整”；需做证据位置置换实验。论文不是 code-review 质量实验 |
-| [RULER，COLM 2024](https://arxiv.org/abs/2404.06654) | 单条 needle 检索不足以评价多跳关联、聚合等长上下文能力 | 审查评估要测“需求→实现→测试”的多跳证据，不只测能否找到一行；其模型样本不能直接代表当前生产模型 |
-| [RepoCoder，EMNLP 2023](https://aclanthology.org/2023.emnlp-main.151/) | 仓库信息分散在多文件，迭代检索能帮助其代码补全任务 | 支持检索后扩展相关上下文的方向；不能把补全收益换算成 SpecGuard 漏检率下降 |
-| [Anthropic：Effective context engineering，2025](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) | 精选上下文、按需检索、压缩和持久笔记有不同成本与失真风险 | 先用现有搜索和轻量任务状态，不需要立即引入向量库或多 agent；纯 API pack 没有工具，不能照搬 agent 的补读能力 |
-| [Cucumber Gherkin Reference](https://cucumber.io/docs/gherkin/reference/) | Scenario 使用 Background 的前置条件；Rule、Examples 和语言声明有结构语义 | 分块要保留继承上下文与实例参数，不能把 scenario 的局部原文视为完整契约 |
-| [Stryker：mutant states and metrics](https://stryker-mutator.io/docs/mutation-testing-elements/mutant-states-and-metrics/)；[PIT：basic concepts](https://pitest.org/quickstart/basic_concepts/) | 执行覆盖和能杀死变异不同；等价变异、运行错误也不能简单当成缺测试 | 在受控回放中使用行为变异检验断言强度，区分 survived、no coverage、invalid、equivalent；不要要求全仓一律追求 100% mutation score |
-| [Bazel query guide](https://bazel.build/query/guide#reverse-dependencies) | 已有构建图可以查询反向依赖 | 若采用者已有可靠图，复用它做受影响测试/调用方扩展；这不是要求所有项目迁移 Bazel |
-| [OpenAPI 3.1.1 规范](https://spec.openapis.org/oas/v3.1.1.html) | HTTP API 契约可由机器可读接口描述表达 | 需求来源不应等同于 Markdown 中的 MUST。本轮引用固定规范版本说明输入形态，不主张它是最新版本 |
+| [Lost in the Middle, TACL 2024](https://aclanthology.org/2024.tacl-1.9/) | In the QA/retrieval tasks measured, the position of the evidence affects how well the model uses a long context | "It fits" must not be treated as "understood completely"; evidence-position permutation experiments are needed. The paper is not a code-review quality experiment |
+| [RULER, COLM 2024](https://arxiv.org/abs/2404.06654) | Single-needle retrieval is not enough to evaluate long-context abilities such as multi-hop association and aggregation | Review evaluation should test multi-hop evidence "requirement→implementation→test", not just whether one line can be found; its model samples cannot directly represent current production models |
+| [RepoCoder, EMNLP 2023](https://aclanthology.org/2023.emnlp-main.151/) | When repository information is scattered across files, iterative retrieval helps its code-completion task | Supports the direction of expanding related context after retrieval; completion gains cannot be converted into a drop in SpecGuard's miss rate |
+| [Anthropic: Effective context engineering, 2025](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) | Curated context, on-demand retrieval, compression, and persistent notes have different costs and distortion risks | First use the existing search and lightweight task state; there is no need to introduce a vector store or multiple agents immediately; a pure API pack has no tools and cannot copy an agent's ability to read more |
+| [Cucumber Gherkin Reference](https://cucumber.io/docs/gherkin/reference/) | A Scenario uses the preconditions of Background; Rule, Examples, and language declarations have structural semantics | Chunking must keep inherited context and example parameters; the local text of a scenario cannot be treated as the complete contract |
+| [Stryker: mutant states and metrics](https://stryker-mutator.io/docs/mutation-testing-elements/mutant-states-and-metrics/); [PIT: basic concepts](https://pitest.org/quickstart/basic_concepts/) | Execution coverage differs from being able to kill a mutant; equivalent mutants and run errors cannot simply be counted as missing tests | In controlled replay, use behavior mutations to test assertion strength, and distinguish survived, no coverage, invalid, and equivalent; do not require the whole repo to pursue a 100% mutation score across the board |
+| [Bazel query guide](https://bazel.build/query/guide#reverse-dependencies) | An existing build graph can be queried for reverse dependencies | If an adopter already has a reliable graph, reuse it to expand affected tests/callers; this does not require every project to migrate to Bazel |
+| [OpenAPI 3.1.1 specification](https://spec.openapis.org/oas/v3.1.1.html) | An HTTP API contract can be expressed by a machine-readable interface description | The requirement source should not be equated with MUST in Markdown. This round cites a fixed specification version to illustrate the input form, and does not claim it is the latest version |
 
-## 3. 当前系统实际在做什么
+## 3. What the Current System Actually Does
 
-`trace.discover → parseItems/blocksOf → audit-collect.select/evidence → audit-units.inventory → prompt/contextPack/scan-parts → validate/verify → state/发布` 是本轮追踪的链路。源码、测试映射和调度被共同检查；不是只看 prompt。
+`trace.discover → parseItems/blocksOf → audit-collect.select/evidence → audit-units.inventory → prompt/contextPack/scan-parts → validate/verify → state/publish` is the chain traced in this round. The source code, the test mapping, and the scheduling were checked together; not just the prompt.
 
-| 环节 | 当前实现与上限 | 对全仓审查的含义 |
+| Stage | Current implementation and limits | Meaning for whole-repo review |
 |---|---|---|
-| 文档发现 | `trace.js` 支持 MD/MDX/RST/ADOC/TXT/feature；自动发现结合位置、名称和规范性内容，显式路径可强制准入；候选 2000、准入 500、普通文件 256 KiB、解析字节预算 48 MiB | “未发现需求”不是“仓库没有需求”；格式不支持、预算未读、过滤为数据应分别记账 |
-| scan 文档集合 | `audit-collect.js:16,228` 最多 60 份，再从其 block 集合轮转；默认每轮至多 80 block | 文档准入和 block 轮转是两层，后者不能自动补回前者未准入的文档 |
-| 需求正文 | candidate 文本 240 字符、检索文本最多 600 字符、block 正文最多 4000 字符 | 摘要不能承担完整契约身份；否定、例外、单位、表头可能在被截掉部分 |
-| code-first inventory | `audit-units.js:13,89–90`：源码 ≤512 KiB、至少 3 个非注释行；最多读取按路径排序的 6000 源文件 | 最大文件被过滤后，后面的分片机制根本见不到它；6000 上限不是“下一轮自动续读” |
-| 测试发现/映射 | 最多读取 4000 测试文件、每文件 512 KiB、总量约 48 MiB；每 unit 最多 20 个候选；名称、调用词和路径启发式 | 输入排名的候选不是执行覆盖集合；未读测试已经有 limitation，但不能等价推断其无断言 |
-| 当前分片 | main 的大 unit 按约 40 KiB 推导固定行窗口；block 数量超过 batch 才产生多调用计划 | `scan-parts.js:15,47` 的 code-first units 仍集中在一个 unit call；0 个文档 block 不会因为源码多就自动分成多个调用 |
-| 模型语义边界 | API 模式只有 pack；agent 模式可用只读文件工具 | “请继续读文件”不能补救 API pack 缺证据；两种模式必须共享完整性语义，而不是共享一句补读提示 |
+| Document discovery | `trace.js` supports MD/MDX/RST/ADOC/TXT/feature; automatic discovery combines location, name, and normative content, and an explicit path can force admission; 2000 candidates, 500 admitted, 256 KiB per ordinary file, 48 MiB parse-byte budget | "No requirement found" is not "the repo has no requirements"; unsupported format, budget-unread, and filtered-as-data should be accounted for separately |
+| scan document set | `audit-collect.js:16,228` at most 60 documents, then rotates through their block set; by default at most 80 blocks per round | Document admission and block rotation are two layers; the latter cannot automatically recover documents the former did not admit |
+| Requirement body | candidate text 240 characters, retrieval text at most 600 characters, block body at most 4000 characters | A summary cannot carry the identity of the complete contract; negations, exceptions, units, and table headers may be in the truncated part |
+| code-first inventory | `audit-units.js:13,89–90`: source ≤512 KiB, at least 3 non-comment lines; reads at most 6000 source files sorted by path | Once the largest files are filtered out, the later slicing mechanism never sees them; the 6000 limit is not "automatically continue reading in the next round" |
+| Test discovery/mapping | Reads at most 4000 test files, 512 KiB per file, about 48 MiB in total; at most 20 candidates per unit; name, call-word, and path heuristics | Candidates ranked from the input are not an execution coverage set; unread tests already have a limitation, but it cannot be equated to inferring they have no assertions |
+| Current slicing | In main, large units derive a fixed line window from about 40 KiB; a multi-call plan arises only when the number of blocks exceeds the batch | The code-first units of `scan-parts.js:15,47` are still concentrated in one unit call; 0 document blocks will not automatically be split into multiple calls just because there is a lot of source |
+| Model semantic boundary | API mode has only the pack; agent mode can use read-only file tools | "Please keep reading files" cannot remedy missing evidence in an API pack; both modes must share the completeness semantics, not share one line of read-more prompt |
 
-这些是限制清单，不把每个上限都当成 bug。下面只列有具体反例、能影响本次目标的发现。
+This is a list of limits, and not every limit is treated as a bug. Below, only findings with concrete counterexamples that can affect this goal are listed.
 
-## 4. Must fix：新反例
+## 4. Must fix: New Counterexamples
 
-### 1. [P1] F30：短但完整的需求在进入候选前消失
+### 1. [P1] F30: A short but complete requirement disappears before entering the candidates
 
-- **What this is:** `src/trace.js:297,359–364` 用 `MIN_BLOCK=20` 过滤 block，先于后面的规则解释。
-- **Problem:** `AC-1: Reject zero.` 和 `必须拒绝负数。` 都被 parseItems 识别为 1 项，却都变成 `admitted=0, ruled=0`。不是模型认为它们不构成需求，而是它们没有机会进入审查，也没有进入 ruled 清单。
-- **Fix:** ID、验收项和明确约束不套用粗略长度拒绝；对描述性短片段保留上下文再分类。任何拒绝必须留下原因，区分“没有需求”与“过滤掉需求”。
-- **If we skip it:** 简洁 AC 和非英语需求会系统性漏检；要求作者写更长句子不会提高需求质量。
+- **What this is:** `src/trace.js:297,359–364` filters blocks with `MIN_BLOCK=20`, ahead of the later rule interpretation.
+- **Problem:** `AC-1: Reject zero.` and `必须拒绝负数。` (Chinese for "Must reject negative numbers.") are both recognized by parseItems as 1 item, yet both become `admitted=0, ruled=0`. It is not that the model decided they do not constitute requirements; they never had a chance to enter the review, nor did they enter the ruled list.
+- **Fix:** IDs, acceptance items, and explicit constraints should not be subject to a crude length rejection; for descriptive short fragments, keep the context and then classify. Any rejection must leave a reason, distinguishing "there is no requirement" from "the requirement was filtered out".
+- **If we skip it:** Concise ACs and non-English requirements will be systematically missed; asking authors to write longer sentences does not improve requirement quality.
 
-证据：Q1。这里只证明上述中英文例子；不声称完整覆盖所有语言的需求语法。
+Evidence: Q1. This only proves the Chinese and English examples above; it does not claim to cover the requirement grammar of all languages.
 
-### 2. [P1] F31：真实阈值表被数值占比规则排除
+### 2. [P1] F31: A real threshold table is excluded by the numeric-share rule
 
-- **What this is:** `src/trace.js:323,349–355` 以 numeric-cell share 判断数据表；行自身没有英文 must/shall/should/will 时，表头契约语义不会阻止排除。
-- **Problem:** `Subscription | Maximum requests per minute | Burst limit` 下的 `Starter subscription | 10 | 20` 和 `Enterprise subscription | 100 | 200` 两行均被标记为 `results/data table row`，候选数为 0。这是接口限流契约，不是测量结果。
-- **Fix:** 行与表头、单位、上级标题一起分类；纯数值占比仅作为排序线索。显式 requirements_paths 中的疑似约束表优先保留待判，不能直接作为已排除的无需求数据。
-- **If we skip it:** 最适合生成边界单元测试的数值约束恰好消失，后续再好的检索和模型都无从补救。
+- **What this is:** `src/trace.js:323,349–355` decides a data table by numeric-cell share; when the row itself has no English must/shall/should/will, the header's contract semantics do not prevent the exclusion.
+- **Problem:** The two rows `Starter subscription | 10 | 20` and `Enterprise subscription | 100 | 200` under `Subscription | Maximum requests per minute | Burst limit` are both marked `results/data table row`, giving 0 candidates. This is an API rate-limit contract, not a measurement result.
+- **Fix:** Classify the row together with the header, units, and parent heading; the pure numeric share serves only as a ranking clue. A suspected constraint table in an explicit requirements_paths should be preferentially retained for judgement, and must not be directly treated as already-excluded no-requirement data.
+- **If we skip it:** The numeric constraints best suited to generating boundary unit tests are exactly what disappears, and no later retrieval or model, however good, can remedy it.
 
-证据：Q2。排除原因可见，因此它不同于 F30 的无 ruled 记录；但可见的错误排除仍会损害目标。
+Evidence: Q2. The exclusion reason is visible, so it differs from F30's no-ruled-record case; but a visible wrong exclusion still harms the goal.
 
-### 3. [P1] F32：Gherkin 分块丢失继承前置条件，修改它也不改变 scenario 身份
+### 3. [P1] F32: Gherkin chunking loses inherited preconditions, and changing them does not change scenario identity
 
-- **What this is:** `src/trace.js:239–259` 单独输出 scenario 原文；`audit-collect` 用局部 block 计算 cid，`scan-parts` 只带本批 block 的正文。
-- **Problem:** 21 个 scenario 共享 Background，使用默认 batch=20。把租户前提从 `SUSPENDED_TENANT` 改为 `ACTIVE_TENANT`，最后一个 scenario 的 cid 不变；该 scenario 所在 part 的 prompt 和 pack 都没有此前提，`blockCuts={}`。
-- **Fix:** 为 scenario 附加适用的 Feature/Rule/Background、继承标签及 Examples 绑定，内容版本包含这些依赖。不要只扩大一个固定重叠窗口来猜测祖先位置。
-- **If we skip it:** 同样“拒绝付款”的结果在不同租户状态下有完全不同的含义；局部 block 看似未变，实际契约已变。这里证明上下文缺失/身份不变，没有声称实跑模型必然误判。
+- **What this is:** `src/trace.js:239–259` outputs the scenario's original text on its own; `audit-collect` computes the cid from the local block, and `scan-parts` carries only the body of the blocks in this batch.
+- **Problem:** 21 scenarios share a Background, with default batch=20. Changing the tenant precondition from `SUSPENDED_TENANT` to `ACTIVE_TENANT` leaves the cid of the last scenario unchanged; neither the prompt nor the pack of the part containing that scenario has this precondition, `blockCuts={}`.
+- **Fix:** Attach the applicable Feature/Rule/Background, inherited tags, and Examples bindings to the scenario, and have the content version include these dependencies. Do not merely enlarge a fixed overlap window to guess the position of ancestors.
+- **If we skip it:** The same "reject payment" result has entirely different meanings under different tenant states; the local block looks unchanged while the actual contract has changed. This proves missing context/unchanged identity; it does not claim that a real model run necessarily misjudges.
 
-证据：Q3，真实 collect 和 scan-parts。Background 对 scenario 的作用以 [Cucumber 官方规则](https://cucumber.io/docs/gherkin/reference/#background) 为依据；Background 自己另列一个候选并不能建立依赖关系。
+Evidence: Q3, real collect and scan-parts. The role of Background for a scenario is based on the [official Cucumber rules](https://cucumber.io/docs/gherkin/reference/#background); listing the Background as a candidate of its own does not establish the dependency.
 
-### 4. [P1] F33：测试 helper 变弱不会使受影响 unit 的历史证据过期
+### 4. [P1] F33: A weakened test helper does not make the historical evidence of the affected unit stale
 
-- **What this is:** `src/audit-units.js:131` 的版本只包含源码和已匹配测试文件的 blob，没有这些测试的依赖。
-- **Problem:** `amount.test.js` 调用 `helpers/check.js` 的 verifyExact；helper 从 `assert.equal(actual, expected)` 改为 `assert.ok(actual)`。amount 的测试文件未变，unit ver 不变、changed 优先级为 0、stale 清单为空；同次新增 unit 被先选中，helper 又不是 code-first unit。
-- **Fix:** 至少把已识别的测试 helper、fixture、setup 和相关配置纳入证据依赖哈希；解析不了依赖时，以受影响 package 范围保守失效，不应标成版本仍可信。优先复用项目已有依赖信息。
-- **If we skip it:** 原来的精确断言已不再约束错误值，但历史 covered 可能长期保留。不是声称永远不再审，问题是失去了应有的变更优先级和过期提示。
+- **What this is:** The version at `src/audit-units.js:131` includes only the blobs of the source and the matched test files, not the dependencies of those tests.
+- **Problem:** `amount.test.js` calls verifyExact from `helpers/check.js`; the helper changes from `assert.equal(actual, expected)` to `assert.ok(actual)`. The amount test file is unchanged, the unit ver is unchanged, the changed priority is 0, and the stale list is empty; the unit added in the same run is selected first, and the helper is not a code-first unit.
+- **Fix:** At minimum, include the recognized test helpers, fixtures, setup, and related config in the evidence dependency hash; when dependencies cannot be resolved, conservatively invalidate by the affected package scope, and do not mark the version as still trustworthy. Prefer reusing the dependency information the project already has.
+- **If we skip it:** The original exact assertion no longer constrains wrong values, but the historical covered may be retained for a long time. It is not claimed that it will never be reviewed again; the problem is the loss of the proper change priority and the staleness signal.
 
-证据：Q4。无需先构建通用全语言调用图；先覆盖本项目实际使用的简单 import/require/helper 形式，并明确剩余 unknown。
+Evidence: Q4. There is no need to first build a generic all-language call graph; first cover the simple import/require/helper forms that this project actually uses, and state the remaining unknowns explicitly.
 
-### 5. [P1] F34：较大源码在分片前已被静默排除
+### 5. [P1] F34: Larger source files are silently excluded before slicing
 
-- **What this is:** `src/audit-units.js:89` 在构造 unit 之前过滤 `e.size > 512 KiB`，`partOf` 只作用于剩余 unit。
-- **Problem:** 627,780-byte 的普通 `src/large.js` 在受控 Git 样本中产生 `units=0, limitations=[]`。把 chunk 调小、增加运行轮数或增大 max_units 都不会使这个文件进入分片。
-- **Fix:** 至少记录超限源码的路径、大小和未审状态；确需全仓覆盖时对其安全分段读取/建索引，再按语义划分任务。生成文件可按明确规则排除，不能用大小替代“非产品代码”。
-- **If we skip it:** 大仓库里最需要分块的文件反而不在审查分母中，“没有 unit 可审”会掩盖实际未审范围。
+- **What this is:** `src/audit-units.js:89` filters `e.size > 512 KiB` before constructing units, and `partOf` acts only on the remaining units.
+- **Problem:** An ordinary 627,780-byte `src/large.js` produces `units=0, limitations=[]` in a controlled Git sample. Shrinking the chunk, adding more run rounds, or increasing max_units will not bring this file into slicing.
+- **Fix:** At minimum record the path, size, and unreviewed status of over-limit sources; when full-repo coverage is truly needed, safely read/index them in segments and then divide tasks semantically. Generated files can be excluded by explicit rules; size must not stand in for "not product code".
+- **If we skip it:** In a large repo the files that most need chunking are outside the review denominator, and "no unit to review" hides the actual unreviewed scope.
 
-证据：Q5。样本是构造的有效源码集合，证明上限行为；没有声称实际采用者已出现某个同尺寸生产缺陷。
+Evidence: Q5. The sample is a constructed valid source set that proves the limit behavior; it does not claim that actual adopters have already hit a production defect of the same size.
 
-## 5. Should fix：已声明边界在目标负载下的问题
+## 5. Should fix: Problems of Declared Boundaries Under the Target Load
 
-### 6. [P2] F35：block 轮转无法遍历第 61 份需求文档
+### 6. [P2] F35: Block rotation cannot traverse the 61st requirement document
 
-- **What this is:** `audit-collect.js:228` 先取固定前 60 份文档，之后才依据 prior state 选择 block。
-- **Problem:** 61 份显式匹配的需求文档，两轮都只准入同样的 60 份，第 61 份留在 rejected。代码顺序可进一步推导：固定 tree/config 下，更新已准入 block 的状态不能让尾部文档进入候选全集。
-- **Fix:** 让文档准入也有可续跑页/轮转，或把 package scope 明确分区并记录各分区完成情况。报告同时列 eligible 总数、准入数、排除数、待扫描数。
-- **If we skip it:** 轮转完成只表示前 60 份完成，不能代表全仓。当前已有显式 over-limit 提示；本项是全仓 goal 的规模缺口，不把它包装成隐藏异常或无限轮次实测结果。
+- **What this is:** `audit-collect.js:228` first takes a fixed first 60 documents, and only afterwards selects blocks based on prior state.
+- **Problem:** With 61 explicitly matched requirement documents, both rounds admit the same 60, and the 61st stays in rejected. The code order allows a further inference: under a fixed tree/config, updating the state of admitted blocks cannot bring tail documents into the candidate universe.
+- **Fix:** Give document admission a resumable page/rotation too, or explicitly partition the package scope and record the completion of each partition. The report should list the total eligible, admitted, excluded, and pending-scan counts together.
+- **If we skip it:** Rotation completing only means the first 60 are done, and cannot represent the whole repo. There is already an explicit over-limit notice; this item is a scale gap for the full-repo goal, and is not packaged as a hidden anomaly or an unlimited-rounds measured result.
 
-证据：Q6。源码 6000 上限也位于风险排序之前，具有类似的准入边界；本轮没有构造 6001 文件压测，将其列为下一阶段验收条件。
+Evidence: Q6. The 6000 source limit also sits before risk ranking and is a similar admission boundary; this round did not build a 6001-file stress test and lists it as an acceptance condition for the next phase.
 
-### 7. [P2] F36：其他 package 的同名测试填满 cap，挤掉更相关的候选
+### 7. [P2] F36: Same-named tests from other packages fill the cap and crowd out more relevant candidates
 
-- **What this is:** `src/test-map.js:64–83` 先收 same-name 测试，再处理调用多个公开符号的测试；scan 每 unit cap=20。
-- **Problem:** 对 `packages/z/src/ledger.js`，其他 20 个 package 各有一个 ledger.test.js；本 package 的 account-behaviour.test.js 调用两个公开方法。mapTests 收下 20 个外部同名文件，后者被 cap 排除。
-- **Fix:** 在最终截断前综合 package/import/call 关联排名；同名只是信号，不是强于所有调用证据的硬优先级。若不得不裁剪候选，记录“搜索不全”，保持相关测试存在性未知。
-- **If we skip it:** monorepo 的常见重复命名会浪费上下文并漏掉真正测试。模型有工具时或可补搜，API pack 没有这条补救路径；反例证明候选丢失，不直接证明某次模型误报。
+- **What this is:** `src/test-map.js:64–83` first collects same-name tests, then handles tests that call multiple public symbols; scan caps each unit at 20.
+- **Problem:** For `packages/z/src/ledger.js`, each of 20 other packages has a ledger.test.js; this package's account-behaviour.test.js calls two public methods. mapTests accepts the 20 external same-named files, and the latter is excluded by the cap.
+- **Fix:** Rank by combining package/import/call association before the final truncation; same-name is a signal, not a hard priority stronger than all call evidence. If candidates must be trimmed, record "search incomplete" and keep the existence of the relevant test unknown.
+- **If we skip it:** The common duplicate naming in monorepos wastes context and misses the real test. A model with tools may search further; an API pack has no such remedy path; the counterexample proves that candidates are lost, and does not directly prove any particular false positive from a model.
 
-证据：Q7。仓库已注明名称搜索的局限；新增的是实际达到 cap 时强候选被弱候选排挤的组合反例。
+Evidence: Q7. The repository has already noted the limits of name search; what is new is the combined counterexample where a strong candidate is crowded out by weak candidates when the cap is actually reached.
 
-## 6. 对上一报告 F28 的证据更正与补强
+## 6. Evidence Correction and Reinforcement for F28 in the Previous Report
 
-上一报告的 N4 手工写入 `audit-evidence.txt`，用 YAML 样本验证单批/多批打包路径的差异。**它不证明 collector 自动找到了 YAML**；`audit-collect.js` 的 NOT_EVIDENCE 实际排除 YAML/JSON 等文件。因此原文“evidence search 已明确找到了它”不准确，本次在原报告同步更正。
+The previous report's N4 manually wrote `audit-evidence.txt` and used a YAML sample to verify the difference between single-batch and multi-batch packing paths. **It does not prove that the collector found the YAML automatically**; NOT_EVIDENCE in `audit-collect.js` actually excludes YAML/JSON and similar files. Therefore the original statement "evidence search has explicitly found it" is inaccurate, and this round corrects it in the original report as well.
 
-Q8 现在从真实 collector 开始：需求要求 validator 在扣款前拒绝负数；code-first 的 max_units=1 选中了另一个风险更高的模块。collector 确实将 `billing/validator.js` 放入需求 evidence；默认单批 pack 却没有其正文，`notWhole=[]`。所以 **F28 的核心问题仍成立**，不再依赖不符合自动检索规则的输入。
+Q8 now starts from the real collector: the requirement demands that the validator reject negative numbers before charging; code-first max_units=1 selected another, higher-risk module. The collector did put `billing/validator.js` into the requirement evidence; but the default single-batch pack does not contain its body, `notWhole=[]`. So **the core problem of F28 still holds**, and no longer depends on an input that does not conform to the automatic retrieval rules.
 
-这个更正也说明：测试某个下游函数接受手工 payload，不等于证明真实上游会产生该 payload。今后的 unknown-unknown 反例，应优先经过真实 producer → consumer，并明确缩小后的模型/网络边界。
+This correction also shows that a test of some downstream function accepting a manual payload does not prove that the real upstream will produce that payload. Future unknown-unknown counterexamples should preferably pass through the real producer → consumer, and explicitly narrow the model/network boundary.
 
-## 7. 需求识别应该保留的结构
+## 7. The Structure Requirement Identification Should Preserve
 
-需要把“找到文档”“找到候选”“确认适用契约”“关联代码/测试”分成可观察的步骤；它们可以继续使用现有文件和函数，不需要先建一个新平台。
+"Document found", "candidate found", "applicable contract confirmed", and "code/tests associated" need to be separate observable steps; they can continue to use existing files and functions, without first building a new platform.
 
-| 层次 | 最小信息 | 不能偷换成什么 |
+| Layer | Minimum information | What it cannot be swapped for |
 |---|---|---|
-| 文档清单 | commit/blob、path、格式、scope、来源方式、未读/超限原因 | 文件名像 spec 不等于权威 oracle |
-| 原子行为 | 主体、触发条件、预期结果、否定、边界/单位、例外，以及原文位置 | 关键词命中不等于可测试；短句也不等于非需求 |
-| 继承上下文 | 标题层级、表头与单位、Background/Rule、Examples 行、引用依赖 | 单行引用真实不等于完整语义真实 |
-| 适用性 | package/产品版本、draft/accepted/superseded、契约来源与冲突 | 最近修改的文档不自动覆盖较早但仍有效的契约 |
-| 身份与版本 | 可追踪身份 + 保留语义的内容版本 + 依赖版本 | lower-case/删标点后的 hash 不适合表示契约版本（前轮 F25） |
-| 关联和结论 | 代码、测试、规则证据及未解决依赖；每条义务有已审/未知原因 | 没搜到不能推成不存在；覆盖一个正向例子不能覆盖另一个反向要求 |
+| Document inventory | commit/blob, path, format, scope, discovery method, unread/over-limit reason | A filename that looks like a spec does not make it an authoritative oracle |
+| Atomic behavior | subject, trigger condition, expected result, negation, boundary/unit, exception, and the original text location | A keyword hit does not mean testable; a short sentence does not mean non-requirement |
+| Inherited context | heading hierarchy, table headers and units, Background/Rule, Examples rows, reference dependencies | A single line quoted truthfully does not mean the complete semantics are truthful |
+| Applicability | package/product version, draft/accepted/superseded, contract source and conflicts | The most recently modified document does not automatically override an earlier but still valid contract |
+| Identity and version | traceable identity + content version that preserves semantics + dependency version | A hash after lower-casing/stripping punctuation is not suitable for representing a contract version (F25 of the previous round) |
+| Association and conclusion | code, tests, rule evidence, and unresolved dependencies; each obligation has a reviewed/unknown reason | Not finding it in search cannot be inferred as nonexistence; covering one positive example cannot cover another opposite requirement |
 
-自动发现保留路径/名称/内容三类线索；`requirements_paths` 用于补充和限定范围，不应被误解为“文件中的每句话都正确且现行”。对 draft、废弃 ADR、相互矛盾文档，应保留来源并要求明确的权威规则；没有规则时标 conflict/unknown，不让模型悄悄选一个版本。
+Automatic discovery keeps three kinds of clues: path/name/content; `requirements_paths` is for supplementing and limiting scope, and should not be misread as "every sentence in the file is correct and current". For draft, deprecated ADR, and mutually contradictory documents, keep the source and require an explicit authoritative rule; when there is no rule, mark conflict/unknown, and do not let the model quietly pick a version.
 
-结构化契约应独立评估：OpenAPI、JSON Schema、protobuf、GraphQL、数据库约束和配置默认值都可能表达行为。本轮确认默认发现偏重文本，未实现这些格式的通用语义识别；也没有证明“显式传入它们绝对无法准入”。建议先用真实采用者样本统计占比，再选最常用的一两种格式做适配，保留 `$ref`/引用和版本。不要靠把整份 YAML 转成自然语言摘要来丢失约束。
+Structured contracts should be evaluated independently: OpenAPI, JSON Schema, protobuf, GraphQL, database constraints, and config defaults can all express behavior. This round confirmed that default discovery leans toward text, and generic semantic recognition of these formats is not implemented; it was also not proven that "explicitly passing them in absolutely cannot get them admitted". It is recommended to first use samples from real adopters to count their share, then pick the one or two most common formats for adaptation, keeping `$ref`/references and versions. Do not lose constraints by converting a whole YAML into a natural-language summary.
 
-没有独立需求来源时，仍能审查边界、异常路径和断言强度，但不能把“代码与测试相同”升级为“符合业务意图”。需求冲突、未发现、解析不支持、预算未读、明确不适用应分别展示。
+Without an independent requirement source, boundaries, exception paths, and assertion strength can still be reviewed, but "code and tests agree" cannot be upgraded to "conforms to business intent". Requirement conflicts, not found, parsing unsupported, budget-unread, and explicitly not applicable should be displayed separately.
 
-## 8. 全仓 unit-test audit 应审什么
+## 8. What a Whole-Repo Unit-Test Audit Should Review
 
-审查对象应该是**可观察行为**，不强求每个私有函数都有独立测试。一个 unit 的候选证据至少要回答：
+The review object should be **observable behavior**; it is not required that every private function have its own test. The candidate evidence of a unit must at least answer:
 
-1. 什么正常输入、边界、非法输入、错误传播、状态变化值得测试？只有与行为相关的维度进入本次任务，避免机械枚举。
-2. 测试实际调用了哪个实现？同名文件、字符串命中和行覆盖只是候选信号；检查 import、间接调用和 package 边界。
-3. 断言是否对一个合理错误实现会失败？同时检查 helper、fixture、setup、参数化案例、skip/only、异步等待和 mock 的作用；这些不是全部已发现的 bug，而是待验证矩阵。
-4. 期望值来自需求/独立常量，还是再次调用实现算出来？即便测试可杀死某些变异，仍需判断 oracle 是否正确。
-5. 较高层测试覆盖的纯逻辑是否能下沉？涉及真实事务、协议、序列化、框架 wiring 的契约可能仍需集成测试，不能为提高 unit 数量而删除。
+1. What normal inputs, boundaries, invalid inputs, error propagation, and state changes are worth testing? Only dimensions related to the behavior enter this task, avoiding mechanical enumeration.
+2. Which implementation does the test actually call? Same-named files, string hits, and line coverage are only candidate signals; check imports, indirect calls, and package boundaries.
+3. Would the assertion fail for a reasonable wrong implementation? Also check the role of helpers, fixtures, setup, parameterized cases, skip/only, async waiting, and mocks; these are not all bugs already found, but a matrix to be verified.
+4. Does the expected value come from the requirement / an independent constant, or was it computed by calling the implementation again? Even if a test can kill some mutations, it is still necessary to judge whether the oracle is correct.
+5. Can pure logic covered by higher-level tests be pushed down? Contracts involving real transactions, protocols, serialization, and framework wiring may still need integration tests, and must not be deleted to raise the unit count.
 
-静态结论、执行覆盖、变异结果是不同证据层。建议在可信、隔离的既有 CI/回放环境中选择少量高风险行为做 targeted mutation，验证 `>= → >`、返回值改变、异常吞掉等具体错误是否被阻止。等价变异和环境错误需分开记录，依据 [PIT 的限制说明](https://pitest.org/quickstart/basic_concepts/)；本次没有安装变异工具或执行被审查仓库的模型生成测试。
+Static conclusions, execution coverage, and mutation results are different layers of evidence. It is recommended to choose a few high-risk behaviors in a trusted, isolated existing CI/replay environment for targeted mutation, to verify whether concrete errors such as `>= → >`, a changed return value, or a swallowed exception are blocked. Equivalent mutants and environment errors should be recorded separately, per [PIT's statement of limitations](https://pitest.org/quickstart/basic_concepts/); this round did not install mutation tools or execute model-generated tests of the reviewed repositories.
 
-版本失效至少需要考虑：被审源码、相关测试、读到的 helper/fixture/setup、适用需求及其父上下文、规则和相关配置、分析器版本。不能只缓存“这个 SHA 曾经有过一句 covered”。依赖图不全时明确保守范围，避免声称精确增量。
+Version invalidation must at least consider: the reviewed source, related tests, the helpers/fixtures/setup read, the applicable requirement and its parent context, rules and related config, and the analyzer version. One cannot cache only "this SHA once had a covered". When the dependency graph is incomplete, state the conservative scope explicitly and avoid claiming precise incrementality.
 
-## 9. 大仓库到底何时、怎样 chunk
+## 9. When and How Large Repositories Should Actually Be Chunked
 
-### 9.1 先区分四种不同操作
+### 9.1 First Distinguish Four Different Operations
 
-| 操作 | 目的 | 完成后仍不能推出的结论 |
+| Operation | Purpose | What still cannot be concluded after it completes |
 |---|---|---|
-| Inventory 分页 | 枚举整个合格对象集合，避免固定前缀永远霸占名额 | 枚举过不等于审查过 |
-| 检索窗口 | 从文件中定位候选证据，减少无关内容 | 搜索窗口不等于完整行为 |
-| 审查任务分块 | 在预算内提供足够的行为与证据，得到局部结论 | 局部结论不等于跨边界一致 |
-| 跨轮调度 | 在多次运行中推进剩余范围，并响应版本变化 | 多次运行不等于当前版本全部完成 |
+| Inventory paging | Enumerate the whole set of eligible objects, so that a fixed prefix does not hog the slots forever | Having been enumerated does not mean having been reviewed |
+| Retrieval window | Locate candidate evidence in files, reducing irrelevant content | A search window is not the complete behavior |
+| Review-task chunking | Provide enough behavior and evidence within budget to obtain a local conclusion | A local conclusion is not cross-boundary consistency |
+| Cross-round scheduling | Advance the remaining scope over multiple runs, and respond to version changes | Multiple runs do not mean everything is complete for the current version |
 
-当前实现主要有后两种的一部分。前一轮 F22/F23/F27/F28，加上本轮 F32/F34/F35，说明仅调整 `partBytes` 无法解决它们。
+The current implementation mainly has parts of the latter two. The previous round's F22/F23/F27/F28, plus this round's F32/F34/F35, show that merely adjusting `partBytes` cannot solve them.
 
-### 9.2 选择规则
+### 9.2 Selection Rules
 
-| 情况 | 建议 |
+| Situation | Recommendation |
 |---|---|
-| 一个行为及其必要证据能在预算中完整容纳 | 保持一个任务，不为追求统一尺寸强拆 |
-| 单文件较大但函数/行为边界清楚 | 按函数/相关行为划分；共享 imports、类型、前置条件和调用接口作为支持上下文 |
-| 同一行为跨多文件 | 同一任务优先带上相关调用方/被调方、契约和测试；文件数不是切分依据 |
-| 单行为本身仍超预算 | 先建结构与依赖清单，再分阶段分析；保留 unresolved dependencies；增加一个跨阶段核对，不以各片的“无发现”自动得到 covered |
-| 多 package 大仓 | 先 package/owner/domain scope 排队，再选行为任务；共享库变化触发消费者检查，不能把目录当成绝对语义边界 |
-| 无需求文档的 code-first scan | 同样依据源码＋测试证据的总体积拆 unit calls，不能由文档 block 数量决定是否拆分 |
+| A behavior and its necessary evidence fit completely in the budget | Keep one task; do not force a split for the sake of uniform size |
+| A single file is large but function/behavior boundaries are clear | Divide by function/related behavior; shared imports, types, preconditions, and call interfaces serve as supporting context |
+| The same behavior spans multiple files | Prefer carrying the related callers/callees, contract, and tests in the same task; the number of files is not the basis for splitting |
+| A single behavior still exceeds the budget on its own | First build a structure and dependency inventory, then analyze in stages; keep unresolved dependencies; add a cross-stage check, and do not automatically get covered from "no findings" in each piece |
+| A multi-package large repo | First queue by package/owner/domain scope, then pick behavior tasks; a shared-library change triggers a consumer check; a directory cannot be treated as an absolute semantic boundary |
+| Code-first scan without requirement documents | Likewise split unit calls by the total volume of source + test evidence; whether to split cannot be decided by the number of document blocks |
 
-预算应以**整次实际请求**计算：模型允许输入空间减去 system、schema、输出预留和安全余量，再受到本次费用/时间限额约束。250,000 bytes 不是固定数量的 tokens；不同语言、字符和正文结构不同，不能只把文件字节加起来就称请求安全。具体目标 token 大小通过下面的对照实验决定，不给一个未经测量的“最佳 2K/8K/32K”。
+The budget should be computed on the **entire actual request**: the input space the model allows minus system, schema, output reservation, and a safety margin, then bounded by this run's cost/time limits. 250,000 bytes is not a fixed number of tokens; different languages, characters, and body structures differ, so one cannot call a request safe merely by adding up file bytes. The specific target token size is decided by the comparison experiment below, without giving an unmeasured "best 2K/8K/32K".
 
-### 9.3 最小实现顺序
+### 9.3 Minimum Implementation Order
 
-1. **先修真实性。** 保留被过滤/裁剪/未回答对象的清单；旧 cursor 绑定内容和布局，拒绝过期证据。沿用现有 state 格式能做的先做。
-2. **给准入层可续跑能力。** 文档和源码集合按确定性顺序分页，记录 eligible/visited/excluded/remaining；优先级可以改变顺序，不能永久改变全集。记录分区是否穷尽。
-3. **补齐当前任务的支持上下文。** requirement 父结构、被匹配测试的 helper 和本 package 关联先补；使用现有词法/路径索引和简单依赖提取即可起步。已有构建图的仓库再接其反向依赖。
-4. **让 block 和 unit 共用预算规则。** 一个任务超限时分拆独立行为；每个子任务显式返回 assessed、unresolved、evidence ranges 和 version。单任务与多任务路径遵循同样的 evidence completeness。
-5. **最终归并只做有证据的事。** 按 obligation 身份去重，保留冲突、失败、未完成和跨块依赖；共同 chunk 的只读支持上下文不重复计入“已审业务范围”。需要跨边界再审时建明确任务，不让 reducer 从摘要猜结论。
+1. **First fix truthfulness.** Keep the list of filtered/trimmed/unanswered objects; bind old cursors to content and layout, and reject stale evidence. Do first what can be done with the existing state format.
+2. **Give the admission layer resumability.** Page the document and source sets in a deterministic order, and record eligible/visited/excluded/remaining; priority may change the order but must not permanently change the universe. Record whether the partition is exhaustive.
+3. **Fill in the supporting context of the current task.** First add the requirement parent structure, the helpers of matched tests, and this package's associations; the existing lexical/path index and simple dependency extraction are enough to start. Repos with an existing build graph then hook up its reverse dependencies.
+4. **Make blocks and units share the budget rules.** When a task exceeds the limit, split out independent behaviors; each subtask explicitly returns assessed, unresolved, evidence ranges, and version. The single-task and multi-task paths follow the same evidence completeness.
+5. **The final merge does only evidence-backed things.** Deduplicate by obligation identity, and keep conflicts, failures, incompletes, and cross-block dependencies; the read-only supporting context shared by chunks is not double-counted in the "reviewed business scope". When a cross-boundary re-review is needed, create an explicit task, and do not let the reducer guess a conclusion from summaries.
 
-不建议现在直接增加：全语言 AST 服务、向量数据库、永久图数据库、多 agent 编排、任意百分比固定 overlap。它们可能有价值，但应由实际失败样本和收益证明。检索词法不足时再评估 embedding/reranker；纯函数边界提取不足时再为主要语言引入成熟 parser。后者是按证据增量，不是依赖永远为零。
+It is not recommended to add right now: an all-language AST service, a vector database, a permanent graph database, multi-agent orchestration, or an arbitrary percentage of fixed overlap. They may be valuable, but should be justified by actual failure samples and gains. Evaluate embedding/reranker when lexical retrieval is insufficient; introduce a mature parser for the main languages when pure function-boundary extraction is insufficient. The latter is incremental by evidence, not dependency forever at zero.
 
-一个最小任务记录可以继续作为 JSON 文件保存：`snapshot、scope、primary obligation/range、supporting refs+hashes、analyzer/layout version、未解决依赖、result state`。失败和预算耗尽保持待审；最终判断必须针对同一版本的义务全集。先以简单、可恢复的单进程调度验证，不以并发复杂度替代正确性。
+A minimal task record can continue to be saved as a JSON file: `snapshot, scope, primary obligation/range, supporting refs+hashes, analyzer/layout version, unresolved dependencies, result state`. Failures and budget exhaustion remain pending review; the final judgement must target the full set of obligations of the same version. Validate first with simple, recoverable single-process scheduling, and do not let concurrency complexity stand in for correctness.
 
-## 10. 用实验决定是否升级 chunking
+## 10. Use Experiments to Decide Whether to Upgrade Chunking
 
-对同一固定 corpus、同一模型/参数和总预算，比较：A 当前 pack，B package＋行为分块，C B＋依赖补读。先离线检查结构不变量，再在另行授权的真实模型评估中比较效果；本次没有执行 B/C 产品实现或付费模型评测。
+On the same fixed corpus, same model/parameters, and total budget, compare: A the current pack, B package + behavior chunking, C B + dependency read-more. First check structural invariants offline, then compare effects in a separately authorized real-model evaluation; this round did not execute B/C product implementations or paid-model evaluations.
 
-| 维度 | 必须包含的反例/对照 | 核心指标 |
+| Dimension | Counterexamples/controls that must be included | Core metrics |
 |---|---|---|
-| 需求发现 | 本轮短中英文 AC、数值表；另补废弃 ADR、互相矛盾契约、结构化格式、否定和单位 | 文档发现 recall 与 block recall 分开；误排除率；不能只用入选候选做分母 |
-| 测试质量 | helper 弱化、参数化、mock 返回固定值、代码和预期一起错、有效 helper 断言对照 | 行为缺口 precision/recall；误报修复时间；同名测试误关联率 |
-| 边界与规模 | 60/61 文档、6000/6001 源文件、512 KiB 两侧；20/21 block；函数跨分片、无文档、多 package | inventory 穷尽性、版本一致性、每轮新增已审范围、尾部等待时间 |
-| 上下文完整性 | 改 Background；移动证据到开头/中间/末尾；预算降低；同一行为拆到两文件 | 未读证据必须 unknown；证据位置/布局改变不应凭空提高 complete |
-| 生命周期 | helper 或需求变更、分析器升级、分片布局改变、运行中断/重试 | 过期状态是否重新排队；是否重复计数；未完成是否被误记 covered |
-| 真正 shift-left | 使用引入 PR 当时可得证据回放真实 QA 缺陷，正常 PR 作噪声对照 | QA 前可行动命中、实际采纳/确认修复、时延、token/费用；与离线代理指标分开 |
+| Requirement discovery | This round's short Chinese and English ACs and numeric tables; additionally deprecated ADRs, mutually contradictory contracts, structured formats, negations, and units | Document discovery recall and block recall separately; false-exclusion rate; one cannot use only the selected candidates as the denominator |
+| Test quality | helper weakening, parameterization, mock returning fixed values, code and expectation wrong together, a valid helper assertion as control | Behavior-gap precision/recall; false-positive fix time; same-name test false-association rate |
+| Boundary and scale | 60/61 documents, 6000/6001 source files, both sides of 512 KiB; 20/21 blocks; function across slices, no documents, multiple packages | Inventory exhaustiveness, version consistency, newly reviewed scope per round, tail waiting time |
+| Context completeness | Change Background; move evidence to the beginning/middle/end; lower the budget; split the same behavior across two files | Unread evidence must be unknown; changing evidence position/layout should not raise complete out of thin air |
+| Lifecycle | helper or requirement change, analyzer upgrade, slicing layout change, run interruption/retry | Whether stale state is re-queued; whether anything is double-counted; whether unfinished work is mistakenly recorded as covered |
+| True shift-left | Replay real QA defects using the evidence available at the time of the introducing PR, with normal PRs as a noise control | Actionable hits before QA, actual adoption/confirmed fix, latency, token/cost; kept separate from offline proxy metrics |
 
-合并门槛先用确定性不变量：合格对象要有去向、短需求不能无记录消失、scenario 继承条件必须可见、helper 变化使依赖证据失效、裁剪不能提高 confidence、重复展示不增加 TP。模型 precision 的数值门槛应来自采用者噪声成本和基线，本文不杜撰已达成的百分比。
+Merge thresholds use deterministic invariants first: eligible objects must have a destination, short requirements must not vanish without a record, scenario inherited conditions must be visible, a helper change must invalidate the dependent evidence, trimming must not raise confidence, and repeated display must not add TP. Numeric thresholds for model precision should come from the adopter's noise cost and the baseline; this document does not invent percentages that have been achieved.
 
-## 11. 验证记录与可复现材料
+## 11. Verification Record and Reproducible Material
 
-验证环境：Windows / Node v26.11.1；shell 相关测试把 Git Bash 放在 PATH 前端。相关测试在上述 main 运行时代码上执行，命令如下：
+Verification environment: Windows / Node v26.11.1; shell-related tests put Git Bash at the front of PATH. The related tests were run on the runtime code of the main above, with these commands:
 
 ```powershell
 $env:PATH = 'C:\Program Files\Git\bin;C:\Program Files\Git\usr\bin;' + $env:PATH
 node --test --test-reporter=tap --test-concurrency=2 src/trace.test.js src/audit-collect.test.js src/audit-units.test.js src/test-map.test.js src/claude-api.test.js
 ```
 
-这次组合运行在 1504546.7662 ms（约 25 分钟）后，主动停止了仍未结束的 trace 子进程。其他四个文件的 **107 项测试通过**；runner 原始汇总为 **108 tests / 107 pass / 1 fail / 0 cancelled / 0 skipped / 0 todo**，其中唯一 fail 是被停止的 `src/trace.test.js` 文件级 `ERR_TEST_FAILURE`。这不是已定位的产品断言失败，也不能把未结束的 trace 回归记为通过。
+This combined run, after 1504546.7662 ms (about 25 minutes), actively stopped the trace subprocess that had still not finished. The **107 tests passed** in the other four files; the runner's raw summary was **108 tests / 107 pass / 1 fail / 0 cancelled / 0 skipped / 0 todo**, of which the only fail was the file-level `ERR_TEST_FAILURE` of the stopped `src/trace.test.js`. This is not a located product assertion failure, and the unfinished trace regression cannot be recorded as passing.
 
-随后对 trace 中与需求解析直接相关的用例单独验证：
+Subsequently, the cases in trace directly related to requirement parsing were verified separately:
 
 ```powershell
 node --test --test-reporter=tap --test-name-pattern='^(parseItems|blocksOf|isRequirementDoc|isSpecDoc)' src/trace.test.js
 ```
 
-结果：**22 tests / 22 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo**，5321.8197 ms。另外，8 个独立缺口 probe 全部复现。现有用例通过与这些缺口并不矛盾：它们没有阻止附录展示的行为。
+Result: **22 tests / 22 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo**, 5321.8197 ms. In addition, all 8 independent gap probes reproduced. The existing cases passing does not contradict these gaps: they did not block the behaviors shown in the appendix.
 
-验证范围是四个完整测试文件＋trace 的 22 项指定解析用例＋8 个反例；**本轮未完成完整 trace 的 Git/CLI 回归，也未重跑全仓所有测试**，没有把上一轮全套测试计数当成此次结果。没有修改产品代码、安装依赖、调用真实模型或写入真实 GitHub 评论；并未验证产品发现已经修复。
+The verification scope is four complete test files + 22 designated parsing cases of trace + 8 counterexamples; **this round did not complete the Git/CLI regression of the full trace, nor re-run all tests of the whole repo**, and did not treat the previous round's full-suite test counts as this round's results. No product code was modified, no dependencies installed, no real model called, and no real GitHub comment written; it was not verified that the product findings have been fixed.
 
-附录脚本保存到上述基线根目录，以 `node audit-research.cjs` 执行；它创建有边界检查的临时 Git fixture 并清理。对错误行为的 assert 成功只代表复现成功，不代表产品已修复。Q7 直接隔离 mapper 输入；其余需 Git 的 probe 使用真实相关 producer/consumer。它们没有代表全部真实仓库分布，也不是性能 benchmark。
+The appendix script is saved at the baseline root above and executed with `node audit-research.cjs`; it creates a temporary Git fixture with boundary checks and cleans it up. A successful assert on the wrong behavior only means the reproduction succeeded, not that the product has been fixed. Q7 directly isolates the mapper input; the other probes that need Git use the real related producer/consumer. They do not represent the distribution of all real repositories, and are not performance benchmarks.
 
 <details>
-<summary>完整复现脚本（Node.js + Git，无新增依赖）</summary>
+<summary>Full reproduction script (Node.js + Git, no new dependencies)</summary>
 
 ```javascript
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
@@ -336,7 +336,7 @@ console.log(JSON.stringify(results, null, 2));
 </details>
 
 <details>
-<summary>实际输出：8 个反例</summary>
+<summary>Actual output: 8 counterexamples</summary>
 
 ```json
 [
@@ -428,6 +428,6 @@ console.log(JSON.stringify(results, null, 2));
 
 ## 12. Verdict
 
-**Verdict:** 先确保需求和源码能完整进入可追踪的审查集合，再保证行为及证据一起进 chunk，最后验证跨 chunk/跨版本的一致性。全仓 unit-test audit 应输出可信的行为证据和明确未知范围，不能把文件计数、候选数量或成功运行次数当成质量证明。
+**Verdict:** First ensure that requirements and source can fully enter a traceable review set, then ensure that behavior and evidence enter the chunk together, and finally verify consistency across chunks/versions. A whole-repo unit-test audit should output credible behavioral evidence and an explicit unknown scope, and must not treat file counts, candidate counts, or the number of successful runs as proof of quality.
 
-**Not checked:** 未执行真实模型/pilot、未实现新的分块器、未覆盖所有契约格式和编程语言、未对 6001 文件或实际大型采用者仓库做性能压测。完整 trace 回归被主动中止；其 22 项直接相关解析用例另行通过，不能替代剩余 Git/CLI 场景。本轮修正文档中的证据表述，产品发现仍待实现与回归验证。
+**Not checked:** No real model/pilot was run, no new chunker was implemented, not all contract formats and programming languages were covered, and no performance stress test was done on 6001 files or actual large adopter repositories. The full trace regression was actively aborted; its 22 directly related parsing cases passed separately, which cannot replace the remaining Git/CLI scenarios. This round corrects the evidence statements in the documentation, and the product findings are still pending implementation and regression verification.

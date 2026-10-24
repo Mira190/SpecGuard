@@ -1,237 +1,237 @@
-# SpecGuard 与 Kite：基于实际 Actions、PR review 和 scan 的 shift-left 复核
+# SpecGuard and Kite: A Shift-Left Re-check Based on Actual Actions, PR Reviews, and Scans
 
-> **处置状态（2026-10-17，main 45713a2）：** 本文发现已复核。已修复：6.1/6.2 来源与层级协议噪音（#229）；6.3 规格冲突方向（#227）；失败重跑覆盖结果（#228）；需求链接召回（#232）；fix-through 计量（#233）；大测试上下文截断（#234）；扫描吞吐（#230、#231、#235，实测 nest 每次 7→32 个 unit）。未修复/待办：Kite 种子复测受阻于 Kite 的 Anthropic secret 过期；"reduced=incomplete" 状态语义待定。行号与 SHA 以本文写作时为准。
+> **Disposition status (2026-10-17, main 45713a2):** The findings in this document have been re-checked. Fixed: 6.1/6.2 source and layer protocol noise (#229); 6.3 spec conflict direction (#227); failed re-run overwriting results (#228); requirement link recall (#232); fix-through metering (#233); large test context truncation (#234); scan throughput (#230, #231, #235, measured nest 7→32 units per run). Unfixed / to do: the Kite seeded re-test is blocked by Kite's expired Anthropic secret; the "reduced=incomplete" status semantics are to be decided. Line numbers and SHAs are as of when this document was written.
 
-日期：2026-10-17，Australia/Sydney。线上最终快照：2026-10-16 23:43 UTC（悉尼 10:43）；本地读取延续至约 10:45。本文续接[策略报告](/C:/Files/Projects/SpecGuard/docs/shift-left-value-strategy-2026-10-16.md)和[上一轮未知风险复查](/C:/Files/Projects/SpecGuard/docs/unknown-unknown-review-2026-10-17.md)。
+Date: 2026-10-17, Australia/Sydney. Final online snapshot: 2026-10-16 23:43 UTC (Sydney 10:43); local reading continued until about 10:45. This document continues the [strategy report](/C:/Files/Projects/SpecGuard/docs/shift-left-value-strategy-2026-10-16.md) and the [previous unknown-risk re-check](/C:/Files/Projects/SpecGuard/docs/unknown-unknown-review-2026-10-17.md).
 
-**判断：已证明能在合并前发现有价值的测试与需求问题，并出现了实际修复闭环；尚不足以证明稳定、全面地满足 shift left，更不能据此宣称降低了真实团队的 QA 返工或缺陷逃逸。** 当前优先级应是让已有证据被正确识别、让范围和失败状态可解释、让发现与修复对应起来，再扩大扫描量。
+**Judgment: it has been proven able to find valuable test and requirement problems before merge, and an actual fix loop has appeared; it is not yet enough to prove that it satisfies shift left stably and comprehensively, and certainly cannot be used to claim that real teams' QA rework or defect escapes have been reduced.** The current priority should be to make existing evidence correctly recognized, make scope and failure states explainable, and make findings correspond to fixes, before expanding the scan volume.
 
-本轮通过 GitHub 插件读取两仓库的运行元数据、选定 job 原始日志、PR 最新摘要和 review 讨论、变更 patch、workflow、scan issue 和 artifact 列表；另检查本地新修复状态。没有重新运行付费模型、修改 GitHub、合并或清理分支。详细样本见 [18 条 PR 台账](/C:/Files/Projects/SpecGuard/docs/shift-left-live-review-ledger-2026-10-17.csv)及[原始证据快照](/C:/Files/Projects/SpecGuard/docs/shift-left-live-review-evidence-2026-10-17.json)。
+This round read the two repositories' run metadata, the raw logs of selected jobs, the latest PR summaries and review discussions, change patches, workflows, scan issues, and artifact lists through the GitHub plugin; the state of the new local fixes was also checked. No paid model was re-run, and nothing on GitHub was modified, merged, or cleaned. For detailed samples see the [18-PR ledger](/C:/Files/Projects/SpecGuard/docs/shift-left-live-review-ledger-2026-10-17.csv) and the [raw evidence snapshot](/C:/Files/Projects/SpecGuard/docs/shift-left-live-review-evidence-2026-10-17.json).
 
-## 1. 判定标准与版本边界
+## 1. Judgment criteria and version boundaries
 
-这里的 shift left 是：在作者仍能修改、且尚未合并时，基于当时可获得的需求和代码，指出可信且可执行的验证缺口；随后有修正和验证，并保留可追溯证据。advisory review 也可以满足目标，不要求把所有 AI 发现改为强制阻断。
+Shift left here means: while the author can still modify and before merge, based on the requirements and code available at the time, point out credible and actionable verification gaps; after that there are corrections and verification, and traceable evidence is kept. An advisory review can also satisfy the goal, and it is not required to turn all AI findings into mandatory blockers.
 
-| 边界 | 实际读取结果 | 对结论的影响 |
+| Boundary | Actual reading result | Impact on the conclusion |
 |---|---|---|
-| SpecGuard 初始主分支 | 8415eae，#223 已合入 | 上轮缺陷必须按后续修复重新分类 |
-| SpecGuard 最终主分支 | 9cdc780c55e1352fffab6397698c87edc388175d，#224、#225 均已合入 | 不能继续把对应问题描述为“当前主分支尚未修复” |
-| Kite 目标主分支 | master：8583c5000c360ab437e07f60ada03f895a87c0b7 | 不是 main；scan 和种子 PR 的基线明确 |
-| Kite 最新已运行 Action | 242507f176a296e1c1a65a4acd42c870aefccb76，build ac93c6d8e3f4 | 不是本轮最新 SpecGuard 主分支，不能当作新修复验收 |
-| Kite 上一次 scan Action | aa183c7c09dc8cde1fac2a3c2607520c72be2c80 | 同一目标 commit 的两次结果，工具版本不同 |
-| 本地 DENY 修复 | fix/deny-all-inputs：e367359；包含 0cc092c，并合入最新 main；读取时工作树干净 | 新修复已成为本地提交；尚未建立它已上线及重新验收的证据 |
+| SpecGuard initial main branch | 8415eae, #223 merged | The previous round's defects must be reclassified according to later fixes |
+| SpecGuard final main branch | 9cdc780c55e1352fffab6397698c87edc388175d, #224 and #225 both merged | The corresponding problems can no longer be described as "not yet fixed on the current main branch" |
+| Kite target main branch | master: 8583c5000c360ab437e07f60ada03f895a87c0b7 | Not main; the baseline of the scan and the seeded PRs is explicit |
+| Kite latest Action that has run | 242507f176a296e1c1a65a4acd42c870aefccb76, build ac93c6d8e3f4 | Not this round's latest SpecGuard main branch, cannot be taken as acceptance of the new fixes |
+| Kite previous scan Action | aa183c7c09dc8cde1fac2a3c2607520c72be2c80 | Two results for the same target commit, with different tool versions |
+| Local DENY fix | fix/deny-all-inputs: e367359; includes 0cc092c and merged the latest main; the working tree was clean when read | The new fix is now a local commit; there is no evidence yet that it has gone live and been re-accepted |
 
-版本依据：[SpecGuard 最终主分支](https://github.com/Mira190/SpecGuard/commit/9cdc780c55e1352fffab6397698c87edc388175d)、[Kite 最新 scan 日志入口](https://github.com/Mira190/Kite/actions/runs/38713252604)、[上一 scan](https://github.com/Mira190/Kite/actions/runs/38704392965)。本地修复工作树仍由其他任务使用，本轮仅观察。
+Version basis: [SpecGuard final main branch](https://github.com/Mira190/SpecGuard/commit/9cdc780c55e1352fffab6397698c87edc388175d), [Kite latest scan log entry](https://github.com/Mira190/Kite/actions/runs/38713252604), [previous scan](https://github.com/Mira190/Kite/actions/runs/38704392965). The local fix worktree is still used by other tasks and was only observed in this round.
 
-## 2. 运行成功与审查有效是两组数字
+## 2. Run success and review validity are two sets of numbers
 
-最终快照的最近 50 条运行：SpecGuard 47 success、2 failure、1 cancelled；Kite 50 success。它们是 GitHub 执行结论，不能直接换算成发现准确率、测试充分性或完整审查率。窗口会随新运行移动，不能与前一报告的窗口直接比较。
+Latest 50 runs at the final snapshot: SpecGuard 47 success, 2 failure, 1 cancelled; Kite 50 success. They are GitHub execution conclusions, and cannot be converted directly into finding accuracy, test sufficiency, or complete review rate. The window moves with new runs and cannot be compared directly with the window of the previous report.
 
-本轮逐条审查的 PR 摘要固定为 SpecGuard #218–#225 共 8 条、Kite #10–#19 共 10 条，每 PR 只取快照时最新 sticky summary：
+The PR summaries reviewed one by one this round are fixed as SpecGuard #218–#225 (8 in total) and Kite #10–#19 (10 in total), taking only the latest sticky summary at snapshot time for each PR:
 
-| 指标 | SpecGuard：8 条 | Kite：10 条 | 正确解释 |
+| Metric | SpecGuard: 8 | Kite: 10 | Correct interpretation |
 |---|---:|---:|---|
-| 摘要 head 与当前 PR head 对齐 | 8/8 | 10/10 | 已排除直接拿旧 head 摘要评价新代码 |
-| reduced=true | 8/8 | 10/10 | 都是 fast-tier 审查，不代表模型调用失败 |
-| complete=true | 0/8 | 0/10 | 不能宣称完整检查通过 |
-| execution_complete=true | 1/8 | 10/10 | PR 执行状态；不等于仓库全覆盖 |
-| 摘要 ms 中位数 | 48.33 秒 | 20.86 秒 | 摘要计时，非单次 API 或纯模型时延 |
-| run 创建至摘要更新中位数 | 64.5 秒 | 40 秒 | 通过相同 head、最新事件近似关联，非精确 trace |
-| 最新摘要成本合计 | $0.53 | $0.0491 | 不含旧 push、早期重试、runner 或其他工具成本 |
-| 最终 PR 状态 | 8 条均已合入 | 10 条均 open、未合入 | 不能仅凭合入或评论数量判定修复收益 |
+| Summary head aligned with the current PR head | 8/8 | 10/10 | Directly using an old-head summary to evaluate new code has been excluded |
+| reduced=true | 8/8 | 10/10 | All are fast-tier reviews, which does not mean model calls failed |
+| complete=true | 0/8 | 0/10 | Cannot claim a complete check passed |
+| execution_complete=true | 1/8 | 10/10 | PR execution status; not equal to whole-repository coverage |
+| Summary ms median | 48.33 seconds | 20.86 seconds | Summary timing, not a single API or pure model latency |
+| Run creation to summary update median | 64.5 seconds | 40 seconds | Approximately correlated via the same head and latest event, not an exact trace |
+| Total cost of latest summaries | $0.53 | $0.0491 | Excludes old pushes, early retries, runner, or other tool costs |
+| Final PR status | all 8 merged | all 10 open, not merged | Fix benefit cannot be judged merely from merge or comment counts |
 
-SpecGuard 最终主分支 [CI 38982638077](https://github.com/Mira190/SpecGuard/actions/runs/38982638077) 实际日志为 **1218 tests、1214 pass、0 fail、3 skipped、1 TODO**；push 事件的 dogfood job 是 skipped。前一个 8415eae 主分支运行是 1208 tests、1204 pass，报告使用更新后的结果，避免混淆。
+SpecGuard final main branch [CI 38982638077](https://github.com/Mira190/SpecGuard/actions/runs/38982638077) actual log is **1218 tests, 1214 pass, 0 fail, 3 skipped, 1 TODO**; the dogfood job of the push event was skipped. The earlier main run for 8415eae was 1208 tests, 1204 pass; the report uses the updated result to avoid confusion.
 
-这说明项目具备快速合并前反馈和正常测试基础。但“CI 绿 + 摘要无高置信发现”仍不足以证明改动受到充分保护。
+This shows the project has fast pre-merge feedback and a normal testing foundation. But "CI green + no high-confidence findings in the summary" is still not enough to prove that a change is adequately protected.
 
-## 3. 已经发生的有效 shift-left 案例
+## 3. Cases of effective shift-left that have already happened
 
-### 3.1 #224：机器人 review → 新回归测试 → CI → 合入
+### 3.1 #224: bot review → new regression test → CI → merge
 
-这是本轮最直接的正面证据：
+This is the most direct positive evidence this round:
 
-| UTC 时间 | 事件 |
+| UTC time | Event |
 |---|---|
-| 23:36:42 | review 指出：-w 处理时，删除/新增行数不同，即使某一对只差空白，也必须保留这个变更段 |
-| 23:37:14 | f6204b8 新增对应边界测试，距评论 32 秒 |
-| 23:38:29 左右 | 新 head 的测试完成：1213 tests、1209 pass、0 fail、3 skipped、1 TODO |
-| 23:40:06 | #224 合入 main |
-| 23:41:00 左右 | 两个修复合并后的主分支 CI：1218 tests、1214 pass、0 fail |
+| 23:36:42 | The review pointed out: when handling -w, the numbers of deleted/added lines differ, so even if one pair differs only in whitespace, that hunk must be kept |
+| 23:37:14 | f6204b8 added the corresponding boundary test, 32 seconds after the comment |
+| about 23:38:29 | Tests on the new head completed: 1213 tests, 1209 pass, 0 fail, 3 skipped, 1 TODO |
+| 23:40:06 | #224 merged into main |
+| about 23:41:00 | Main-branch CI after the two fixes were merged: 1218 tests, 1214 pass, 0 fail |
 
-新增测试同时断言“行数不同仍保留”和“行数相同且仅空白差异则忽略”，是约束具体错误行为的回归测试，具有实际价值。[review 原文](https://github.com/Mira190/SpecGuard/pull/224#discussion_r4300257588)、[新增测试提交](https://github.com/Mira190/SpecGuard/commit/f6204b8a2e7e7063cd9c38a87cca548f79854e7b)、[PR CI](https://github.com/Mira190/SpecGuard/actions/runs/38982400348)。
+The new test asserts both "still kept when line counts differ" and "ignored when line counts are the same and the difference is whitespace only"; it is a regression test that constrains specific wrong behavior, and has real value. [Original review text](https://github.com/Mira190/SpecGuard/pull/224#discussion_r4300257588), [new test commit](https://github.com/Mira190/SpecGuard/commit/f6204b8a2e7e7063cd9c38a87cca548f79854e7b), [PR CI](https://github.com/Mira190/SpecGuard/actions/runs/38982400348).
 
-不过，最新机器计数仍是 prior_total=1、outcomes=[]，没有完整表达这次修复。**实际闭环存在，而现有聚合指标没捕获到；不能把 addressed=0 解读成没有价值。** 本例也不能证明真人采用率：账户下的修改可能来自 agent。
+However, the latest machine counts are still prior_total=1, outcomes=[], and do not fully express this fix. **The actual closed loop exists, while the existing aggregate metrics did not capture it; addressed=0 must not be read as no value.** This example also cannot prove human adoption: changes under the account may come from an agent.
 
-### 3.2 #215：评审避免把不确定性变成重复运行循环
+### 3.2 #215: review avoided turning uncertainty into a re-run loop
 
-较早的实际讨论在 11:49:52 UTC 指出 weak-only Unknown 不应自动要求重复运行；11:52:43 的 debb50a 修改了提示与相关测试，11:54:14 回复确认此循环风险，12:12:37 合入。随后 #221 又加强结构化 reduced 原因。
+The earlier actual discussion at 11:49:52 UTC pointed out that weak-only Unknown should not automatically require a re-run; debb50a at 11:52:43 changed the prompt and related tests, a reply at 11:54:14 confirmed this loop risk, and it merged at 12:12:37. Afterwards #221 further strengthened the structured reduced reasons.
 
-这是合并前识别产品反馈循环的案例；贡献来自评审链路整体，不能全部归因于模型。[PR #215](https://github.com/Mira190/SpecGuard/pull/215)、[修复提交](https://github.com/Mira190/SpecGuard/commit/debb50a66d933bee825457a90e254d3775d5a0d6)。
+This is a case of identifying a product feedback loop before merge; the contribution comes from the review chain as a whole and cannot all be attributed to the model. [PR #215](https://github.com/Mira190/SpecGuard/pull/215), [fix commit](https://github.com/Mira190/SpecGuard/commit/debb50a66d933bee825457a90e254d3775d5a0d6).
 
-### 3.3 Kite：普通测试容易放过的“代码与测试一起偏离需求”
+### 3.3 Kite: "code and tests deviating from the requirement together", which ordinary tests easily let through
 
-Kite #15–#19 的代码和测试一起接受新行为，但设计文档没有改：时长、前置可写性检查、快捷键默认值、按钮文案、允许范围都发生漂移。review 能指出两边的具体差异，是与普通测试执行互补的能力。
+In Kite #15–#19 the code and tests accept the new behavior together, but the design document was not changed: duration, the pre-check for writability, the shortcut default, the button copy, and the allowed range all drifted. The review can point out the specific differences on both sides, a capability complementary to ordinary test execution.
 
-因此应继续聚焦“行为与需求是否一致、断言是否保护行为”，而不是把评论数和文件扫描数作为价值目标。
+So the focus should continue to be "is behavior consistent with the requirement, and do the assertions protect the behavior", rather than making comment counts and file scan counts the value target.
 
-## 4. Kite 十个种子 PR：有效检出，但不能当成真实团队收益
+## 4. Kite's ten seeded PRs: effective detection, but not to be taken as real team benefit
 
-这些 PR 是项目验证计划明确记录的 agent 编写种子实验，每个 PR 预埋一个问题，且都是正样本。本轮核对 patch、最新摘要、相关测试和设计文档，沿用原计划的“首屏能看见具体差异”口径；没有把 Details 里的低置信镜像当作首屏成功。
+These PRs are agent-written seeded experiments explicitly recorded in the project's validation plan, each PR having one pre-planted problem, and all being positive samples. This round checked the patches, the latest summaries, related tests, and the design document, following the original plan's definition "the specific difference is visible on the first screen"; low-confidence mirrors in Details were not counted as first-screen success.
 
-| PR / 种子 | 实际预设问题 | 最新摘要呈现 | 本轮判定 |
+| PR / seed | Actual preset problem | Latest summary presentation | This round's judgment |
 |---|---|---|---|
-| [#10 / U1](https://github.com/Mira190/Kite/pull/10#issuecomment-6163634111) | 删除大小写不敏感重复名称 BIG 的断言 | 首屏称无高置信缺口；Details 有低置信内容，历史有 inline | 未达到首屏标准 |
-| [#11 / U2](https://github.com/Mira190/Kite/pull/11#issuecomment-6163639256) | 精确裁剪值断言弱化为 assert.ok | 首屏 weak test，另有额外发现 | 检出预设问题 |
-| [#12 / U3](https://github.com/Mira190/Kite/pull/12#issuecomment-6163642313) | 删除“恰好当前时刻”的调度边界用例 | 明确指出边界用例缺失 | 检出 |
-| [#13 / U4](https://github.com/Mira190/Kite/pull/13#issuecomment-6163641119) | 新增鼠标按钮 4/5 分支，只加无关 keyName 测试 | 明确指出新分支无测试 | 检出 |
-| [#14 / U5](https://github.com/Mira190/Kite/pull/14#issuecomment-6163639462) | 中止空间阈值 100→128 MiB，未保护新边界 | summary-only 明确指出阈值边界 | 检出，无须强求 inline |
-| [#15 / R1](https://github.com/Mira190/Kite/pull/15#issuecomment-6163638242) | 静默时长 10→15 秒，文档仍 10 秒 | 明确 spec mismatch | 检出 |
-| [#16 / R2](https://github.com/Mira190/Kite/pull/16#issuecomment-6163641048) | 移除输出目录可写性前置检查，测试同步改成允许 | 引用文档要求可写 | 检出 |
-| [#17 / R3](https://github.com/Mira190/Kite/pull/17#issuecomment-6163643321) | 摄像头快捷键默认未绑定→Ctrl+F4 | 明确默认值冲突 | 检出 |
-| [#18 / R4](https://github.com/Mira190/Kite/pull/18#issuecomment-6163640934) | 停止录制→结束录制，文档文案未改 | 明确文案冲突 | 检出 |
-| [#19 / R5](https://github.com/Mira190/Kite/pull/19#issuecomment-6163642034) | 倒计时范围 0–9→0–5，文档仍 0–9 | 明确范围冲突 | 检出 |
+| [#10 / U1](https://github.com/Mira190/Kite/pull/10#issuecomment-6163634111) | Deleted the assertion for the case-insensitive duplicate name BIG | First screen says no high-confidence gap; Details has low-confidence content, history has inline | Did not meet the first-screen standard |
+| [#11 / U2](https://github.com/Mira190/Kite/pull/11#issuecomment-6163639256) | Exact clamp-value assertion weakened to assert.ok | First-screen weak test, plus an extra finding | Detected the preset problem |
+| [#12 / U3](https://github.com/Mira190/Kite/pull/12#issuecomment-6163642313) | Deleted the "exactly the current moment" scheduling boundary case | Explicitly points out the missing boundary case | Detected |
+| [#13 / U4](https://github.com/Mira190/Kite/pull/13#issuecomment-6163641119) | Added mouse button 4/5 branches, only added an unrelated keyName test | Explicitly points out the new branch has no test | Detected |
+| [#14 / U5](https://github.com/Mira190/Kite/pull/14#issuecomment-6163639462) | Abort-space threshold 100→128 MiB, new boundary unprotected | summary-only explicitly points out the threshold boundary | Detected, inline need not be insisted on |
+| [#15 / R1](https://github.com/Mira190/Kite/pull/15#issuecomment-6163638242) | Silence duration 10→15 seconds, document still says 10 seconds | Explicit spec mismatch | Detected |
+| [#16 / R2](https://github.com/Mira190/Kite/pull/16#issuecomment-6163641048) | Removed the output-directory writability pre-check, the test was changed in sync to allow it | Cites the document requirement of writability | Detected |
+| [#17 / R3](https://github.com/Mira190/Kite/pull/17#issuecomment-6163643321) | Camera shortcut default unbound→Ctrl+F4 | Explicit default-value conflict | Detected |
+| [#18 / R4](https://github.com/Mira190/Kite/pull/18#issuecomment-6163640934) | "Stop recording"→"End recording", document copy not changed | Explicit copy conflict | Detected |
+| [#19 / R5](https://github.com/Mira190/Kite/pull/19#issuecomment-6163642034) | Countdown range 0–9→0–5, document still 0–9 | Explicit range conflict | Detected |
 
-本轮观察值：**首屏呈现 9/10；单测种子 4/5，需求种子 5/5。** 它是旧 Action 版本在这个固定正样本集的结果，不能写成“最新 SpecGuard 总体召回率 90%”，也不能计算 blind precision。#11 的额外发现不增加预设问题分母或命中数。
+Values observed this round: **first-screen presentation 9/10; unit-test seeds 4/5, requirement seeds 5/5.** This is the result of the old Action version on this fixed positive-sample set, and cannot be written as "the latest SpecGuard's overall recall is 90%", nor can blind precision be computed. The extra finding of #11 does not increase the denominator of preset problems or the hit count.
 
-#14 应补独立值 127 MiB 与 128 MiB 两侧的预期；若测试只引用同一个生产常量，常量错误时生产和测试可能一起通过。应保护需求规定的行为。
+#14 should add the expectations on both sides with independent values 127 MiB and 128 MiB; if the test only references the same production constant, production and test may pass together when the constant is wrong. The behavior prescribed by the requirement should be protected.
 
-十条 PR 全部未合入；样本讨论中未观察到维护者处置评论，也没有 review-arm 标签。当前没有证据证明这十条反馈完成了修复，更没有真人 fix-through。Kite 摘要的 addressed=0、open=9、not_observed=3 是线程观测，可能含历史重复，不能换算为漏检率或误报率。
+All ten PRs are unmerged; no maintainer disposition comments were observed in the sample discussions, and there are no review-arm labels. There is currently no evidence that the ten pieces of feedback completed any fix, let alone human fix-through. The Kite summary's addressed=0, open=9, not_observed=3 are thread observations that may include historical duplicates, and cannot be converted into a miss rate or false-positive rate.
 
-实验定义见[验证计划的种子实验说明](https://github.com/Mira190/SpecGuard/blob/9cdc780c55e1352fffab6397698c87edc388175d/docs/validation-plan.md)；需求核对来自固定版本 [Kite design.md](https://github.com/Mira190/Kite/blob/8583c5000c360ab437e07f60ada03f895a87c0b7/docs/design.md)。
+For the definition of the experiment see the [seeded experiment description in the validation plan](https://github.com/Mira190/SpecGuard/blob/9cdc780c55e1352fffab6397698c87edc388175d/docs/validation-plan.md); the requirement check comes from the pinned-version [Kite design.md](https://github.com/Mira190/Kite/blob/8583c5000c360ab437e07f60ada03f895a87c0b7/docs/design.md).
 
-## 5. Kite 全仓 scan：有存量发现能力，尚未形成全面保障
+## 5. Kite whole-repo scan: it can find existing-stock issues, but has not yet formed comprehensive assurance
 
-[scan run 38713252604](https://github.com/Mira190/Kite/actions/runs/38713252604) 与 [issue #3](https://github.com/Mira190/Kite/issues/3) 的实际范围如下。issue 是可变的最新状态，不是不可变的历次运行档案。
+The actual scope of [scan run 38713252604](https://github.com/Mira190/Kite/actions/runs/38713252604) and [issue #3](https://github.com/Mira190/Kite/issues/3) is as follows. The issue is a mutable latest state, not an immutable archive of every run.
 
-| 层次 | 实际证据 | 不应推导的结论 |
+| Layer | Actual evidence | Conclusion that should not be drawn |
 |---|---|---|
-| 单元发现 | 43 个单元；26 有匹配测试、17 未匹配 | 匹配到文件不等于测试有效；未匹配不等于没有任何测试 |
-| 收集 / 实际审查 | 选入 12 个，实际 reviewed 9/43 | 不能说本次完整扫描了 43 个 |
-| 未装入上下文 | engine.cjs、scene.ts、settings.ts 三个单元未审查 | 本轮应继续保持待检查 |
-| 大文件 | app.cjs 本轮只有 part 1/2，行 1–481 | 不能把整个文件计为完成 |
-| 需求文档 | 1 份；131 个块历史曾审，80 个本轮审、51 个沿用 | 历史曾审不等于当前版本全量复核 |
-| 证据候选 | 80 块中 66 有代码候选、65 有测试候选 | 候选路径不能当作满足需求的证明 |
-| 文档结果 | 可见分组：11 个两轮报告 gap、88 unsure、26 covered | 两轮同意不等于问题已被独立验证 |
-| 状态变化 | 相同目标 commit 的 38 个块状态变化 | 两次 Action SHA 不同，不能直接算模型随机波动 |
-| 执行方式 | 静态 review，明确未执行测试 | covered 不能解释为测试已运行并通过 |
+| Unit discovery | 43 units; 26 with matching tests, 17 unmatched | Matching a file does not mean the test is effective; unmatched does not mean there is no test at all |
+| Collection / actual review | 12 selected, actually reviewed 9/43 | Cannot say this run fully scanned 43 |
+| Not loaded into context | engine.cjs, scene.ts, settings.ts: three units not reviewed | This round should keep them as to be checked |
+| Large file | app.cjs this round only part 1/2, lines 1–481 | The whole file cannot be counted as done |
+| Requirement documents | 1 document; 131 blocks reviewed historically, 80 reviewed this round, 51 carried over | Historically reviewed does not mean the current version was fully re-checked |
+| Evidence candidates | Of 80 blocks, 66 have code candidates, 65 have test candidates | Candidate paths cannot be taken as proof that the requirement is satisfied |
+| Document results | Visible groups: 11 gaps reported in both rounds, 88 unsure, 26 covered | Agreement in two rounds does not mean the problem was independently verified |
+| State changes | 38 blocks changed state for the same target commit | The two Action SHAs differ, so it cannot be counted directly as model random variation |
+| Execution mode | Static review, explicitly no tests executed | covered cannot be interpreted as the tests having been run and passed |
 
-此外，风险表把 scene/settings 标成“this run”，而范围清单又说它们未 fit。本轮能确认的是这份旧运行报告呈现不一致；需要最新版本回放验证，不能直接认定新修复后仍存在。
+In addition, the risk table marks scene/settings as "this run" while the scope list says they did not fit. What this round can confirm is that this old run report presents an inconsistency; it needs replay verification on the latest version, and it cannot be directly assumed to still exist after the new fixes.
 
-issue 中有可核验的文档漂移，例如窗口高度：代码 800 与文档 740 不一致。已有 open [PR #4](https://github.com/Mira190/Kite/pull/4) 涉及同类窗口和默认选择问题，但尚未合入，也不能仅凭主题相同断言它由这次 scan 触发。
+The issue has verifiable document drift, for example the window height: code 800 and document 740 disagree. The existing open [PR #4](https://github.com/Mira190/Kite/pull/4) involves similar window and default-selection problems, but is not merged, and one cannot assert that it was triggered by this scan merely because the topic is the same.
 
-报告体积约 62.9K 字符，已接近 GitHub issue 容量；它明确省略 4 行并指向 audit.json。然而本轮读取最新 scan、上一 scan 和所抽查 PR 的 artifact 列表均无条目，无法取回被省略证据。**能确认“当前无法从列表获取”，不能擅自归因于过期、删除或从未上传。**
+The report is about 62.9K characters, close to the GitHub issue capacity; it explicitly omits 4 rows and points to audit.json. Yet this round found the artifact lists of the latest scan, the previous scan, and the sampled PRs all empty, so the omitted evidence cannot be retrieved. **What can be confirmed is "currently cannot be obtained from the list"; it must not be attributed on one's own to expiry, deletion, or never having been uploaded.**
 
-最新 scan 的 footer 为约 $0.52，772.9k input、34.6k cache、60.2k output、4分03秒，6 次 API 调用，19 个未答块重试一次。它说明 scan 的成本和时延显著高于单条 PR review；应优先按变更和高风险缺口增量审查，而不是无条件反复全仓扩大上下文。
+The latest scan's footer is about $0.52, 772.9k input, 34.6k cache, 60.2k output, 4m03s, 6 API calls, 19 unanswered blocks retried once. It shows the scan's cost and latency are significantly higher than a single PR review; it should prioritize incremental review by changes and high-risk gaps, rather than unconditionally and repeatedly widening the whole-repo context.
 
-全仓 scan 的合理定位是补存量债务、找 PR diff 外的需求漂移，并把相关义务带回后续 PR；单独周期扫仓库，不能证明已经把问题左移到引入它的 PR。
+The reasonable positioning of a whole-repo scan is to cover stock debt, find requirement drift outside PR diffs, and bring the related obligations back to later PRs; a standalone periodic repo scan cannot prove that problems have been shifted left to the PR that introduced them.
 
-## 6. 新修复后，实际 review 暴露出的优先问题
+## 6. Priority problems exposed by the actual reviews after the new fixes
 
-### 6.1 高优先：需求来源协议不一致，造成“有测试仍被要求找测试”
+### 6.1 High priority: inconsistent requirement-source protocol causes "asked to find a test even though a test exists"
 
-#224 最新摘要中 7/7 obligation 被降为 Unconfirmed：模型用了“PR body U1/U2/U3/U4”，验证器认可规范来源“PR body”，以及可剥离 AC 数字后缀的形式；U1 被当成不在已收集集合的文档来源。
+In the latest #224 summary all 7/7 obligations were downgraded to Unconfirmed: the model used "PR body U1/U2/U3/U4", the validator accepts the canonical source "PR body" and forms where an AC numeric suffix can be stripped; U1 was treated as a document source not in the collected set.
 
-其中 O1–O6 已列出 eval/weekly-report.test.js 的具体断言，包括缺 patch 返回 null、重命名前后路径、真实 Git 对比和 -w 新边界。因为关联需求来源不合法，界面仍给出 4 条“Point to the unit test or add one”。[实际摘要](https://github.com/Mira190/SpecGuard/pull/224#issuecomment-6226700210)、[来源验证实现](https://github.com/Mira190/SpecGuard/blob/9cdc780c55e1352fffab6397698c87edc388175d/src/post.js#L1102)。
+O1–O6 already list the concrete assertions of eval/weekly-report.test.js, including missing patch returning null, paths before and after rename, real Git comparison, and the new -w boundary. Because the linked requirement source is invalid, the UI still gives 4 items of "Point to the unit test or add one". [Actual summary](https://github.com/Mira190/SpecGuard/pull/224#issuecomment-6226700210), [source validation implementation](https://github.com/Mira190/SpecGuard/blob/9cdc780c55e1352fffab6397698c87edc388175d/src/post.js#L1102).
 
-**原因是模型输出与验证器的来源协议没有对齐，不能直接断言测试不存在。** 保持拒绝非法来源的原则；由 collector 提供 canonical source ID，让模型只能引用现有 ID，U1 等显示标题单独保存。来源错误应返回有限次数修正机会，仍无法验证则如实 Unknown。不要通过放宽任意文件引用或直接把 Unknown 改 covered 来恢复绿色。
+**The cause is that the model output and the validator's source protocol are not aligned, and it cannot be directly asserted that the tests do not exist.** Keep the principle of rejecting illegal sources; have the collector provide a canonical source ID so that the model can only reference existing IDs, with display titles such as U1 stored separately. A source error should get a limited number of correction chances, and if still unverifiable, honestly Unknown. Do not restore green by loosening arbitrary file references or by directly turning Unknown into covered.
 
-对作者的下一步也应区分：来源待确认、测试证据确实缺失、上下文未收集；来源格式问题优先由工具自行修正。
+The next step for the author should also distinguish: source to be confirmed, test evidence really missing, context not collected; source-format problems should be corrected by the tool itself first.
 
-### 6.2 高优先：测试层级字段缺失，不能转译成“请再补一个单测”
+### 6.2 High priority: the test-layer field is missing, and cannot be translated into "please add another unit test"
 
-#225 的 6 个 obligation 中 4 个因“layer not stated / path not clearly unit”降级，并且多个引擎及测试文件被截断。最新摘要自己承认有 planner→adapter→audit-post→gate 的链路测试，却仍将相关义务反馈为未确认。[实际摘要](https://github.com/Mira190/SpecGuard/pull/225#issuecomment-6226704295)。
+In #225, 4 of 6 obligations were downgraded for "layer not stated / path not clearly unit", and several engine and test files were truncated. The latest summary itself admits there are chain tests of planner→adapter→audit-post→gate, yet still feeds back the related obligations as unconfirmed. [Actual summary](https://github.com/Mira190/SpecGuard/pull/225#issuecomment-6226704295).
 
-最小改进是让 evidence 的层级必填，路径分类由 collector 提供可核对标识，结构错误可有限重试；把“有集成保护但不证明独立单元行为”“未见证据”“证据格式无效”分开。确需单元证据时，应具体说明哪个可独立约束的行为尚缺保护。不要为了获得单元覆盖标签，把本来合适的链路测试拆成只验证实现细节的测试。
+The minimal improvement is to make the evidence layer mandatory, have the collector provide verifiable identifiers for path classification, allow limited retries for structural errors; and separate "has integration protection but does not prove independent unit behavior", "no evidence seen", and "evidence format invalid". When unit evidence is really needed, say specifically which independently constrainable behavior still lacks protection. Do not split a chain test that is appropriate into tests that only verify implementation details just to obtain a unit-coverage label.
 
-### 6.3 高优先：正确发现文档冲突，不代表模型建议的修复方向正确
+### 6.3 High priority: correctly finding a document conflict does not mean the fix direction the model suggests is correct
 
-#222 review 正确发现 PR body 的“policy advisory”与代码 CONFIG 包含 policy 冲突，但建议移除 policy，以服从旧 PR body。维护者实际意图是组织禁用等配置错误应红灯，而安全拒绝又可能共用 policy 分类。[review 原文](https://github.com/Mira190/SpecGuard/pull/222#discussion_r4299937890)、[PR #222](https://github.com/Mira190/SpecGuard/pull/222)。
+The #222 review correctly found the conflict between the PR body's "policy advisory" and the code CONFIG including policy, but suggested removing policy to obey the old PR body. The maintainer's actual intent is that configuration errors such as organization-disabled should be red, while security rejections may share the policy classification. [Original review text](https://github.com/Mira190/SpecGuard/pull/222#discussion_r4299937890), [PR #222](https://github.com/Mira190/SpecGuard/pull/222).
 
-这里应该要求确认错误分类与验收意图、同步 PR body/文档，而不是默认把代码改回旧文案。quota/policy 分类修正提交的时间还早于后续 review 回复，不能把它记成该评论促成的修复。
+Here the requirement should be to confirm the error classification and acceptance intent and to sync the PR body/documents, rather than defaulting to changing the code back to the old copy. The quota/policy classification fix commit is even earlier than the later review reply, so it must not be recorded as a fix prompted by that comment.
 
-需求冲突有价值，但建议需要区分“已确认违约”与“意图待确认”。尤其不能因为自然语言更早存在，就默认它永远优于已明确的产品决策。
+A requirement conflict is valuable, but suggestions need to distinguish "confirmed violation" from "intent to be confirmed". In particular, one must not default to natural language being forever superior to an explicit product decision just because it existed earlier.
 
-### 6.4 中优先：上下文预算应围绕行为义务，而不是平均塞文件
+### 6.4 Medium priority: the context budget should revolve around behavior obligations, not stuff in files evenly
 
-SpecGuard 多条摘要受大测试文件、关联测试片段截断影响；#223 还涉及 collect.sh 的适当测试层级。盲目提高全局字数、增加相邻文件，可能增加成本却仍看不到真正的断言与调用链。
+Many SpecGuard summaries are affected by truncation of large test files and related test snippets; #223 also involves the appropriate test level of collect.sh. Blindly raising the global character count or adding neighboring files may raise cost while still not seeing the real assertions and call chain.
 
-建议优先装入“改动行为 → 调用者/关键 guard → 对应断言片段 → 必要需求原文”；每个义务记录缺的是哪条边。如果文件局部完整、整体不完整，状态也应按义务计算，避免一处截断把不相关结论全部变成 Unknown。
+It is suggested to load first "changed behavior → callers / key guards → corresponding assertion snippets → necessary requirement original text"; for each obligation record which edge is missing. If a file is locally complete but globally incomplete, the status should also be computed per obligation, so that one truncation does not turn all unrelated conclusions into Unknown.
 
-### 6.5 已推进的上轮问题：按真实状态验收，避免重复开缺陷
+### 6.5 Previous round problems already advanced: accept by real status, avoid reopening defects
 
-| 上轮项目 | 最新状态 | 尚需的验收 |
+| Previous item | Latest status | Acceptance still needed |
 |---|---|---|
-| API diff 缺 patch、重命名、-w 语义 | #224 已合入，并有新边界回归 | 观察真实后续 PR 的触碰/修复判断，避免历史数据被错误改写 |
-| coverage row 与低置信镜像的计分口径 | #224 用测试明确：有低置信/Details 镜像的行不另算 FP；无 finding 的行仍算 | 这是合同澄清，不能继续直接列为已确认算法 bug；首屏检出与 FP 指标需分别说明 |
-| split scan 部分成功后配置失败被绿色掩盖 | #225 已合入，链路回归和 CI 通过 | 对配置失败、瞬时故障、预算停止分别核验；部分有效结果仍应保留 |
-| DENY 文档/trace 等入口 | 本地 0cc092c 修复已提交，e367359 合入新 main；读取时干净 | 确认发布状态，并按所有输入入口执行回归；尚无 Kite 最新运行验收 |
+| API diff missing patch, rename, -w semantics | #224 merged, with new boundary regressions | Observe the touched/fixed judgments of real later PRs, avoiding historical data being wrongly rewritten |
+| Scoring definition of coverage rows vs low-confidence mirrors | #224 made explicit through tests: rows with a low-confidence / Details mirror are not counted as an additional FP; rows with no finding are still counted | This is a contract clarification, and can no longer be directly listed as a confirmed algorithm bug; first-screen detection and the FP metric need to be explained separately |
+| Configuration failure after partial success of a split scan masked by green | #225 merged, chain regression and CI pass | Verify configuration failure, transient failure, and budget stop separately; partial valid results should still be kept |
+| DENY document/trace entry points | Local 0cc092c fix committed, e367359 merged the new main; clean when read | Confirm the release status, and run regressions for all input entry points; no Kite latest-run acceptance yet |
 
-本轮没有把本地已存在的新提交误当成“尚未修复”，也没有把本地候选修复直接视为已上线保护。
+This round did not mistake the new local commits that already exist for "not yet fixed", nor treat local candidate fixes directly as live protection.
 
-## 7. Observability 和 trace：先让每个结论可以复核
+## 7. Observability and trace: first make every conclusion re-checkable
 
-当前已有 head、build、model、ms、cost、reduced 和 outcomes 等信息，基础不错。主要缺口是跨运行关联、部分结果的原因、工件可达性与修复事件。无需先引入大型追踪平台。
+There are already head, build, model, ms, cost, reduced, and outcomes, a good foundation. The main gaps are cross-run correlation, reasons for partial results, artifact reachability, and fix events. There is no need to introduce a large tracing platform first.
 
-| 最小记录 | 要解决的实际问题 |
+| Minimum record | Actual problem to solve |
 |---|---|
-| repo、PR、target/base/head SHA、Action 完整 SHA、run_id、run_attempt、job_id | Kite 用浮动 main，两个版本被混作稳定性验证；build 片段不足以直接定位源代码 |
-| model、提示/配置摘要指纹、budget、超时、分片 ID、输入集合指纹 | 区分代码变了、工具变了、输入截断和模型波动 |
-| collector→pack→provider→validator→render→post 各阶段耗时和结果 | 区分等待、推理、证据校验和投递延迟 |
-| 每个义务的 source ID、代码/测试 ref+path+range、证据层级、降级原因枚举 | #224/#225 的协议问题不应被统计成缺测试 |
-| 分片成功/失败分类、重试、保留结果、最终 gate 决策及理由 | 部分成功后 quota/auth 错误不得被执行成功掩盖 |
-| result.json / audit.json 的 schema 版本、SHA 摘要、保存位置和有效期 | issue 省略内容仍需能够取回；空 artifact 列表要明确提示证据不可用 |
-| finding 稳定 ID、关联修复 commit、后续 CI、最终处置 | #224 的有效修复不能丢在 addressed=0 之外 |
+| repo, PR, target/base/head SHA, full Action SHA, run_id, run_attempt, job_id | Kite uses a floating main, two versions were mixed as stability verification; the build fragment is not enough to locate source code directly |
+| model, fingerprint of prompt/configuration summary, budget, timeout, shard ID, fingerprint of the input set | Distinguish code changed, tool changed, input truncated, and model variation |
+| Duration and result of each stage collector→pack→provider→validator→render→post | Distinguish waiting, inference, evidence validation, and delivery latency |
+| Per-obligation source ID, code/test ref+path+range, evidence level, enum of degradation reasons | The protocol problems of #224/#225 should not be counted as missing tests |
+| Shard success/failure classification, retries, retained results, final gate decision and reason | After partial success, quota/auth errors must not be masked by execution success |
+| Schema version, SHA digest, storage location, and validity period of result.json / audit.json | Content omitted by the issue must still be retrievable; an empty artifact list must clearly indicate evidence unavailable |
+| Stable finding ID, linked fix commit, subsequent CI, final disposition | The valid fix of #224 must not be left outside addressed=0 |
 
-建议用现有 JSON 增加上述字段，阶段名可以采用 span 概念，但先以可下载的结构化记录实现。日志和摘要引用同一 trace ID；每分片作为子记录。覆盖度以当前 target SHA、当前输入和证据为准，历史状态带来源时间与版本。
+It is suggested to add the above fields to the existing JSON; stage names can use the span concept, but first implement as downloadable structured records. Logs and summaries reference the same trace ID; each shard is a child record. Coverage is based on the current target SHA, current input, and evidence, with historical states carrying their source time and version.
 
-原始 prompt/context 可以短期保留；体积小且经处理的结果、版本、决策与修复关联应保留到足以做试点评估。具体保留天数按项目数据政策决定，不需为了 trace 永久保存全部私有源码。
+Raw prompt/context can be kept short-term; small, processed results, versions, decisions, and fix links should be kept long enough for pilot evaluation. The specific retention days follow the project's data policy, and there is no need to keep all private source code permanently for the sake of trace.
 
-## 8. 是否满足 shift-left 的逐项判断
+## 8. Item-by-item judgment on whether shift-left is satisfied
 
-| 要求 | SpecGuard 实际表现 | Kite 实际表现 | 判定 |
+| Requirement | SpecGuard actual performance | Kite actual performance | Verdict |
 |---|---|---|---|
-| 在合并前送达作者 | PR 事件执行，约一分钟；#224 明确合并前送达 | PR 事件执行，约 40 秒；种子 PR 仍 open | 已证明 |
-| 发现普通测试会放过的行为风险 | #224 边界测试、#215 反馈循环 | 弱断言、删除边界、代码测试一起偏离需求 | 已证明存在价值 |
-| 结论受可验证证据约束 | 校验失败会降级，避免虚假 covered | 引用需求和代码，低置信内容单独呈现 | 部分满足；来源/层级协议妨碍可用性 |
-| 当前范围明确、无虚假全覆盖 | reduced 和截断显式呈现 | 9/43、分片、沿用历史显式呈现；表格有不一致 | 部分满足 |
-| 建议具体且修复方向可靠 | #224 具体；#222 方向需人工确认 | 大多数种子反馈具体 | 部分满足 |
-| 修复后验证并合入 | #224 有直接闭环；#215 有历史闭环 | 十个种子 PR 无闭环 | SpecGuard 有案例，Kite 未证明 |
-| 失败与不完整状态可信 | #222/#225 改善配置失败处理 | 最新实际执行仍是旧 Action | 新代码有验证，跨仓上线未证明 |
-| 全链路可追溯 | 版本与计数已有，修复关联不足 | 工件当前不可取、issue 可变、版本漂移 | 部分满足 |
-| 相对现有评审产生真实团队增量收益 | 尚无合格真人对照样本 | 种子正样本不回答此问题 | 未证明 |
-| 必需的合并 gate 配置 | protection API 403 | protection API 403 | 无法核验；advisory 设计不因此自动失败 |
+| Delivered to the author before merge | Runs on PR events, about one minute; #224 clearly delivered before merge | Runs on PR events, about 40 seconds; seeded PRs still open | Proven |
+| Find behavior risks that ordinary tests let through | #224 boundary test, #215 feedback loop | Weak assertions, deleted boundaries, code and tests deviating from the requirement together | Value proven to exist |
+| Conclusions constrained by verifiable evidence | Validation failures degrade, avoiding false covered | Cites requirements and code, low-confidence content presented separately | Partly satisfied; source/layer protocol hinders usability |
+| Current scope clear, no false full coverage | reduced and truncation presented explicitly | 9/43, shards, carried-over history presented explicitly; the table has inconsistencies | Partly satisfied |
+| Suggestions specific and fix direction reliable | #224 specific; #222 direction needs human confirmation | Most seeded feedback specific | Partly satisfied |
+| Verified after fix and merged | #224 has a direct closed loop; #215 has a historical closed loop | The ten seeded PRs have no closed loop | SpecGuard has cases, Kite not proven |
+| Failure and incomplete states trustworthy | #222/#225 improve configuration failure handling | The latest actual execution is still the old Action | New code verified, cross-repo go-live not proven |
+| End-to-end traceability | Versions and counts exist, fix linkage insufficient | Artifacts currently unavailable, issue mutable, version drift | Partly satisfied |
+| Real team incremental benefit over existing review | No qualified human-controlled sample yet | Seeded positive samples do not answer this question | Not proven |
+| Required merge gate configuration | protection API 403 | protection API 403 | Cannot be verified; the advisory design does not automatically fail because of this |
 
-**产品阶段判断：适合继续做受控的 PR advisory 试点与定向 scan；尚无证据支持对外宣称“全面保障 shift left”或“已降低真实缺陷率”。**
+**Product-stage judgment: suitable to continue with a controlled PR advisory pilot and targeted scans; there is no evidence to support externally claiming "comprehensive shift-left assurance" or "real defect rate has been reduced".**
 
-## 9. 下一轮最有利于目标的工作顺序
+## 9. Work order most beneficial to the goal in the next round
 
-### P0：先消除本次真实运行中的证据损耗
+### P0: first eliminate the evidence loss in this real run
 
-1. 统一来源 ID 与测试层级协议；为 #224 的 U 标签和 #225 的层级缺失保留回放样本。验收：规范化后可引用既有有效证据，非法来源仍被拒绝；修正失败则具体说明未知原因，不自动改成通过。
-2. 将已合入 #224/#225 与本地 DENY 修复分别记为“已合入 / 本地候选 / 跨仓已验证”。DENY 验收覆盖需求文档、trace 索引、关联文件等所有入口，不只 diff。
-3. 为 partial scan 的成功+配置失败路径保留现有链路回归；同时保证普通 rate/network/budget 情况按既定 advisory 合同呈现，避免一律红灯。
+1. Unify the source ID and test-layer protocols; keep replay samples for the U labels of #224 and the missing layers of #225. Acceptance: after normalization existing valid evidence can be cited, and illegal sources are still rejected; if correction fails, specifically explain the unknown cause, without automatically changing to pass.
+2. Record the merged #224/#225 and the local DENY fix separately as "merged / local candidate / verified cross-repo". DENY acceptance covers all entry points such as requirement documents, trace index, and linked files, not just the diff.
+3. For the success + configuration-failure path of a partial scan, keep the existing chain regression; at the same time ensure ordinary rate/network/budget cases are presented per the established advisory contract, avoiding turning everything red.
 
-### P1：做一次版本受控的跨仓验收，再扩大范围
+### P1: do one version-controlled cross-repo acceptance, then widen the scope
 
-固定 SpecGuard 完整 SHA、Kite target/head、模型和配置，使用现有十个种子，再补没有预埋问题的正常变更对照。需要真实模型复测时先限定预算和次数；本轮没有触发这些运行。
+Pin the full SpecGuard SHA, Kite target/head, model, and configuration, use the existing ten seeds, and add normal-change controls with no planted problems. When a real-model re-test is needed, first limit the budget and count; this round triggered none of these runs.
 
-验收至少回答：#10 首屏漏呈现是否解决；#14 summary-only 是否被正确纳入可行动发现；需求漂移是否持续能给出具体证据；正常对照是否产生错误缺口；#224/#225 的协议错误是否消失；新版本下 scan 的范围表是否自洽。固定输入的小规模重复用于观察变动，不把不同 Action 版本的两轮一致当作稳定性结论。
+Acceptance should at least answer: whether the first-screen omission of #10 is resolved; whether the summary-only of #14 is correctly counted as an actionable finding; whether requirement drift continues to get specific evidence; whether normal controls produce wrong gaps; whether the protocol errors of #224/#225 disappear; whether the scope table of the scan under the new version is self-consistent. Small-scale repeats on fixed input are used to observe variation, and agreement between two rounds of different Action versions is not taken as a stability conclusion.
 
-同时保证完整 audit.json 可取得，或者给出明确的“证据不可用”状态。结果 JSON 和简短人工摘要分开，避免 64K 字符上限迫使关键证据消失。
+Also ensure that the complete audit.json is obtainable, or give a clear "evidence unavailable" status. Keep the result JSON and the short human summary separate, so that the 64K character limit does not force key evidence to disappear.
 
-### P2：从发现计数转向可核验的增量收益
+### P2: move from finding counts to verifiable incremental benefit
 
-先把 #224 这样的发现→测试提交→CI→合入链路记下来；区分自动匹配“触碰过文件”、作者承认有效、人工核验已修复、以及测试确能捕获错误。not_observed 保持未知，不自动当作修复或误报。
+First record the finding → test commit → CI → merge chain as in #224; distinguish automatic matching of "touched the file", the author acknowledging validity, human verification of the fix, and the test really being able to catch the error. Keep not_observed as unknown, and do not automatically treat it as fixed or a false positive.
 
-真人试点继续沿用现有 validation-plan：每工具至少 30 条盲标，fix-through 目标样本 40 PR / 100 findings，合并时间至少 30 条相关已合并 PR；不足时只报告计数。现有继续条件包括 precision ≥65%、fix-through ≥25% 且 PR 聚类下界 >15%、合并时间增幅 ≤15%、对照中独有有效发现 ≥40%。这些是项目预先写下的验收标准，当前样本尚未满足。
+The human pilot continues to follow the existing validation-plan: at least 30 blind-labelled items per tool, a fix-through target sample of 40 PRs / 100 findings, at least 30 relevant merged PRs for merge time; when short, only counts are reported. The existing continuation conditions include precision ≥65%, fix-through ≥25% with PR-clustered lower bound >15%, merge time increase ≤15%, and unique valid findings in the control ≥40%. These are acceptance criteria the project wrote down in advance, and the current samples do not yet meet them.
 
-agent 编写的种子和自审 PR 单独报告；不能用个人账户名替代作者类型核验。长期缺陷逃逸和 QA 返工需要后续观察，当前最新运行不能给出这类因果结论。
+Agent-written seeds and self-reviewed PRs are reported separately; a personal account name cannot replace verification of author type. Long-term defect escape and QA rework need later observation, and the current latest run cannot give such causal conclusions.
 
-## 10. 本轮边界与交付物
+## 10. Boundaries and deliverables of this round
 
-- 这是一份实际运行复核，不是全仓所有历史 PR、每个测试和每条 findings 的完整重判。逐条 PR 样本为 18 条；另读两个 scan 和选定 job 日志、#215 历史闭环。
-- workflow 的同仓、非 draft 条件意味着 fork/draft 不在这条自动路径内；应把范围写入采用文档。Kite 本轮读取的两个 SpecGuard workflow 没有测试执行步骤，不能据此推断整个 Kite 仓库没有其他测试或检查。
-- 分支保护 API 无权限；工件列表无条目；没有读取到缺失的完整 audit.json；未运行 Kite 应用或新模型 replay。这些边界不以猜测补齐。
-- 本地根目录仍是较早 fix 分支，远程 main 与其他工作树更新；本轮按 SHA 和实际文件状态比较，没有把目录位置或提交日期简单等同于“最新全部代码”。
+- This is a real-run re-check, not a complete re-judgment of all historical PRs, every test, and every finding of the whole repository. The per-PR samples number 18; in addition two scans, selected job logs, and the historical closed loop of #215 were read.
+- The workflow's same-repo, non-draft condition means forks/drafts are outside this automatic path; the scope should be written into the adoption documentation. The two SpecGuard workflows of Kite read this round have no test-execution step, and it cannot be inferred from this that the whole Kite repository has no other tests or checks.
+- The branch protection API had no permission; the artifact list had no entries; the missing complete audit.json was not obtained; the Kite application or a new model replay was not run. These boundaries are not filled in by guessing.
+- The local root directory is still an earlier fix branch, with the remote main and other worktrees newer; this round compared by SHA and actual file state, and did not simply equate directory location or commit date with "the latest of all code".
 
-交付：[18 条 PR CSV](/C:/Files/Projects/SpecGuard/docs/shift-left-live-review-ledger-2026-10-17.csv)、[证据 JSON](/C:/Files/Projects/SpecGuard/docs/shift-left-live-review-evidence-2026-10-17.json)。它们保存了摘要正文、相关讨论、版本、最新运行窗口与选定日志，支持在 sticky summary 或 issue 后续变化后复核本轮判断。
+Deliverables: [18-PR CSV](/C:/Files/Projects/SpecGuard/docs/shift-left-live-review-ledger-2026-10-17.csv), [evidence JSON](/C:/Files/Projects/SpecGuard/docs/shift-left-live-review-evidence-2026-10-17.json). They keep the summary text, related discussions, versions, latest run window, and selected logs, supporting a re-check of this round's judgments after the sticky summary or issue changes later.

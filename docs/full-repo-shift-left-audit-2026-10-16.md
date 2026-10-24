@@ -1,197 +1,197 @@
-# 全仓 shift-left audit：最新 main、在审修复与新增反例
+# Full-repo shift-left audit: latest main, in-review fixes and new counterexamples
 
-What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库规则联系起来，提示缺失或薄弱的单元测试，也提供全仓轮转扫描。目标是在 QA 之前发现可行动的缺口；静态审查本身不执行测试，也不能证明行为正确。本次按默认扫描上限、250,000-byte API pack、有较大源码/测试文件、持续提交和跨仓保存扫描结果的实际使用方式审查。
+What this repo does: at the PR stage SpecGuard links requirements, code, tests and repository rules, flags missing or weak unit tests, and also provides a whole-repo rotating scan. The goal is to find actionable gaps before QA; static review itself does not execute tests and cannot prove behavior is correct. This review looks at actual usage with the default scan limits, a 250,000-byte API pack, large source/test files, continuous commits and scan results saved across repositories.
 
-日期：2026-10-16，Australia/Sydney。性质：全仓风险审计，只提交报告，不修改产品代码。
+Date: 2026-10-16, Australia/Sydney. Nature: whole-repo risk audit; only a report is committed, and no product code is changed.
 
-## 1. 版本与结论
+## 1. Version and conclusions
 
-**本次正式基线是重新 fetch 后的最新 `origin/main`，不是上一份报告的分支快照。** 2026-10-16 18:06 AEDT 再次 fetch，main 与以下两项修复的 head 均未变化。
+**The formal baseline this time is the latest `origin/main` after a fresh fetch, not the branch snapshot of the previous report.** Fetched again at 18:06 AEDT on 2026-10-16; neither main nor the heads of the two fixes below have changed.
 
-| 对象 | 固定提交 | 本次验证方式 |
+| Object | Pinned commit | Verification method this time |
 |---|---|---|
-| main | `ee1c15812bae4315f39ce7d5bf1bf7511ac58553` | 全套离线测试首跑、失败项复测、10 个确定性反例 |
-| [PR #197](https://github.com/Mira190/SpecGuard/pull/197)，断言删除后提升低置信度 | `b1aaf113aae3ca69fcc70e7b9026130affa6c30f` | 对 main 的全部 diff；未把它当成已合入代码，也未声称跑过其完整测试集 |
-| [PR #198](https://github.com/Mira190/SpecGuard/pull/198)，按 pack 预算分片 | `c77841d638a7ce1e3de8280fdad6539a05653d1c` | 独立导出这个提交的源码，复跑 5 个新增及 7 个此前反例 |
+| main | `ee1c15812bae4315f39ce7d5bf1bf7511ac58553` | First run of the full offline test suite, re-test of the failures, 10 deterministic counterexamples |
+| [PR #197](https://github.com/Mira190/SpecGuard/pull/197), raise low confidence after an assertion is deleted | `b1aaf113aae3ca69fcc70e7b9026130affa6c30f` | The whole diff against main; it was not treated as merged code, and it is not claimed that its full test set was run |
+| [PR #198](https://github.com/Mira190/SpecGuard/pull/198), sharding by pack budget | `c77841d638a7ce1e3de8280fdad6539a05653d1c` | Source of this commit exported independently; re-ran 5 new counterexamples and 7 earlier ones |
 
-上一份 [复审报告](https://github.com/Mira190/SpecGuard/blob/60a3028e265b40f7c016129f87f2593d15c1f369/docs/shift-left-rereview-2026-10-16.md) 使用的 `a90608c` 是 #198 的较早提交，**不是最新 main**。本文更正版本归属，重新验证其结论，不把旧测试数字移用为新基线的验证结果。
+The `a90608c` used by the previous [re-review report](https://github.com/Mira190/SpecGuard/blob/60a3028e265b40f7c016129f87f2593d15c1f369/docs/shift-left-rereview-2026-10-16.md) is an earlier commit of #198 and **is not the latest main**. This document corrects the version attribution and re-verifies its conclusions, and does not carry the old test numbers over as verification results for the new baseline.
 
-**结论：目前不能认定 shift-left 的关键质量约束已经闭合。** 此次确认 11 项问题：此前 F19–F24 的 6 项仍有复现依据；另外得到 5 项新反例 F25–F29。这里的“新增”是相对上一份复审；不是声称历史上从未有人提出过，也不是证明已经找尽 unknown unknowns。
+**Conclusion: it cannot currently be concluded that the key quality constraints of shift-left have closed.** This time 11 problems are confirmed: 6 earlier ones, F19–F24, still have a reproduction basis; plus 5 new counterexamples F25–F29. "New" here is relative to the previous re-review; it is not a claim that nobody ever raised them before, nor a proof that all unknown unknowns have been found.
 
-最先需要堵住的是：证据丢失、输出验证失败、需求身份错配、历史状态过期时，仍能留下“完整/covered”的结论。其次是确保扫描真的推进、测试路径配置全链路一致、评估不会把同一个发现算两次。扩大 prompt、增加模型预算或继续堆测试数量，都不能替代这些约束。
+What needs to be plugged first: when evidence is lost, output validation fails, requirement identity is mismatched, or historical state is stale, a "complete/covered" conclusion can still be left behind. Next is making sure the scan really advances, that the test-path configuration is consistent along the whole chain, and that the evaluation does not count the same finding twice. Expanding the prompt, increasing the model budget or continuing to pile up the number of tests cannot substitute for these constraints.
 
-## 2. 第一性原理与全仓覆盖范围
+## 2. First principles and the whole-repo coverage scope
 
-仓库原始 goal 是：审查需求和测试，找出缺失单元测试，确认编码标准，并识别可以下沉到单元层的高层测试。对应的必要条件是：
+The repository's original goal is: review requirements and tests, find missing unit tests, confirm the coding standards, and identify high-level tests that can be pushed down to the unit layer. The corresponding necessary conditions are:
 
-1. **需求身份正确。** 某条需求的测试证据不能冒充另一条需求；改变运算符、大小写或值也可能改变契约。
-2. **证据足够且属于当前版本。** “未发现”必须区分没有缺口、没有看到、没有回答、没有验证成功。
-3. **负面结论比正面证据要求更强。** 发现一个真实断言只能证明这一个断言存在；“没有测试”需要搜索相关测试，裁剪不能自动变成不存在。
-4. **增量扫描覆盖当前版本。** cursor 只有绑定内容版本与分片布局才有意义；重复运行要能扩大已审范围。
-5. **反馈发生在可行动时点，效果度量保持身份。** 同一发现移到摘要或多展示一次，不应改变 recall；修改过相关行也不等于已经修复缺陷。
+1. **Requirement identity is correct.** The test evidence for one requirement cannot pass for another requirement; changing an operator, letter case or value may also change the contract.
+2. **Evidence is sufficient and belongs to the current version.** "Not found" must distinguish no gap, not seen, not answered, and not verified successfully.
+3. **A negative conclusion needs stronger evidence than a positive one.** Finding one real assertion proves only that this one assertion exists; "no test" requires searching for the related tests, and a cut cannot automatically turn into non-existence.
+4. **Incremental scanning covers the current version.** A cursor is meaningful only when bound to the content version and the shard layout; repeated runs must be able to widen the reviewed scope.
+5. **Feedback happens at an actionable moment, and effectiveness metrics keep identity.** Moving the same finding into the summary or showing it one more time should not change recall; modifying a related line also does not mean the defect has been fixed.
 
-这些是本次审计使用的不变量，不是新增产品框架。以最小输入变化去尝试破坏它们，比重复已有 happy-path 用例更容易发现系统边界的问题。
+These are the invariants used by this audit, not a new product framework. Trying to break them with the smallest input changes finds system-boundary problems more easily than repeating existing happy-path cases.
 
-| 全仓路径 | 检查的边界与证据 | 本次结论 |
+| Whole-repo path | Boundary and evidence checked | Conclusion this time |
 |---|---|---|
-| README、package、`action.yml`、`.github/workflows/ci.yml`、`specguard-run.yml` | 入口、输入传递、事件/分支限制、权限、CI 与本地运行环境 | main 与在审修复分开；测试路径和跨仓状态读取没有全链路一致 |
-| `collect.sh`、`requirements.js`、`trace.js`、`test-map.js`、`leads.js` | 文档发现、需求身份、候选测试、断言线索、明确的预算和启发式边界 | 不把已声明的启发式局限单独充当新 bug；语义变化被 identity 归一化抹掉是实证问题 |
-| `audit-collect.js`、`audit-units.js`、`scan-parts.js` | 需求轮转、源码分片、版本、证据检索、跨轮状态 | F22–F28；包含有文档与无文档的 code-first 路径 |
-| `prompt.js`、两个产品 skill、`engines/claude-api.js` 与引擎 shell | API 无文件工具约束、上下文打包、分批、预算/失败传播、只读工具参数 | 当前分片与测试切片不同步；单批/多批证据约定不一致；只读参数已检查，但未进行真实模型攻击测试 |
-| `post.js`、`audit-post.js`、schema、`preflight.js` | 输出验证、引用、发布、complete/unknown、缓存及 issue 状态 | F19–F21；反例经过真实 publisher，GitHub API 用本地 mock |
-| `bin/specguard-local.js`、`coverage.js` | 本地提前反馈、与 CI 的输入/后处理复用、覆盖率输入边界 | 已读关键链路并运行相关测试；没有把注入旧覆盖率报告这类未完成论证的猜测列为漏洞 |
-| `eval/grade.js`、`weekly-report.js`、`label-export.js`、replay/seeded 测试及 validation 文档 | 指标身份、summary/inline 展示、真实修复与代理指标 | F29；weekly 的 inline 样本边界已有说明，不能外推为所有摘要反馈的有效性 |
+| README, package, `action.yml`, `.github/workflows/ci.yml`, `specguard-run.yml` | Entry points, input passing, event/branch restrictions, permissions, CI and the local run environment | main and the in-review fixes are kept apart; the test paths and cross-repo state reading are not consistent along the whole chain |
+| `collect.sh`, `requirements.js`, `trace.js`, `test-map.js`, `leads.js` | Document discovery, requirement identity, candidate tests, assertion leads, explicit budgets and heuristic boundaries | A declared heuristic limitation alone is not counted as a new bug; a semantic change erased by identity normalization is an empirical problem |
+| `audit-collect.js`, `audit-units.js`, `scan-parts.js` | Requirement rotation, source sharding, versions, evidence retrieval, cross-round state | F22–F28; includes both the documented and the undocumented code-first paths |
+| `prompt.js`, the two product skills, `engines/claude-api.js` and the engine shells | The API no-file-tool constraint, context packing, batching, budget/failure propagation, read-only tool arguments | The current sharding and the test slicing are out of sync; the single-batch / multi-batch evidence conventions are inconsistent; the read-only arguments were checked, but no real model attack test was done |
+| `post.js`, `audit-post.js`, schema, `preflight.js` | Output validation, citations, publishing, complete/unknown, cache and issue state | F19–F21; the counterexamples go through the real publisher, with the GitHub API as a local mock |
+| `bin/specguard-local.js`, `coverage.js` | Local early feedback, reuse of CI's input/post-processing, coverage input boundaries | Read the key chain and ran the related tests; speculation such as injecting an old coverage report, whose argument was not completed, is not listed as a vulnerability |
+| `eval/grade.js`, `weekly-report.js`, `label-export.js`, replay/seeded tests and validation docs | Metric identity, summary/inline presentation, real fixes versus proxy metrics | F29; the weekly inline sample boundary is already documented, and cannot be extrapolated to the validity of all summary feedback |
 
-“全仓”指跨入口、采集、推理上下文、验证、状态、发布、本地使用和评估的端到端审查。不是宣称逐行深读了每个 fixture、历史研究文档和所有 shell 分支；重点深读了可能造成错误放心、漏检或扫描停滞的链路。外部 SDK 的最新行为未联网核实，本文关于它们只陈述仓库配置，没有引用外部产品保证。
+"Whole repo" means an end-to-end review across entry, collection, inference context, validation, state, publishing, local use and evaluation. It is not a claim that every fixture, historical research document and shell branch was read line by line; the chains that could cause false reassurance, missed detection or scan stalls were read deeply. The latest behavior of external SDKs was not verified online; this document states only the repository configuration about them and cites no external product guarantees.
 
 ## 3. Must fix
 
-### 1. [P1] F19：PR 证据被裁掉，仍发布 complete 并缓存 clean 结论
+### 1. [P1] F19: PR evidence is cut, yet complete is still published and a clean conclusion is cached
 
-- **What this is:** `src/post.js:1469–1476` 读取 `pack-cut.txt`，但主要用它压低已有 missing/weak finding；`1710–1729` 决定 completeness 和 head marker。
-- **Problem:** 让源码、测试都在 pack-cut 中，提供引用能够在磁盘上核对的 covered 输出，真实 publisher 仍返回 `complete=true`、`execution_complete=true`，显示 `No unit test gaps found` 并写 head marker；真实 preflight 随后跳过同一 head。磁盘上存在引用不能证明模型看到了所需上下文。
-- **Fix:** 把影响本次义务的上下文丢失送入 completion 与 obligation 状态；阻止这种结果进入完整 head 缓存。保留可核实的局部发现，但不能据此给整次审查完整背书。
-- **If we skip it:** 用户看见放心信号，同一提交重跑又被跳过，QA 前发现缺陷的机会被直接关闭。main 与 #198 均复现；#197 的 diff 未修改这一 completion/cache 约束。
+- **What this is:** `src/post.js:1469–1476` reads `pack-cut.txt`, but mainly uses it to suppress existing missing/weak findings; `1710–1729` decides completeness and the head marker.
+- **Problem:** With the source and the tests both in pack-cut, and a covered output whose citations can be verified on disk, the real publisher still returns `complete=true`, `execution_complete=true`, shows `No unit test gaps found` and writes the head marker; the real preflight then skips the same head. That a citation exists on disk cannot prove the model saw the context it needed.
+- **Fix:** Feed the loss of context that affects this round's obligations into the completion and obligation state; stop this kind of result from entering the complete head cache. Keep verifiable local findings, but do not give the whole review a complete endorsement on that basis.
+- **If we skip it:** The user sees a reassuring signal, re-running the same commit is skipped, and the chance of finding a defect before QA is shut off directly. Reproduced on both main and #198; the #197 diff does not change this completion/cache constraint.
 
-证据：附录 B `P6_PR_pack_cut`，`status=complete`、`cleanVerdict=true`、`headMarker=true`、`nextRunSkip=true`。
+Evidence: Appendix B `P6_PR_pack_cut`, `status=complete`, `cleanVerdict=true`, `headMarker=true`, `nextRunSkip=true`.
 
-### 2. [P1] F20：无效 finding 被删除后，unit 被写成 covered
+### 2. [P1] F20: After an invalid finding is deleted, the unit is written as covered
 
-- **What this is:** `src/audit-post.js:150–169` 验证 unit finding；`383–386` 从保留 finding 推导 unit 状态；`752–760` 发布并持久化。
-- **Problem:** 一个 selected unit 的唯一 missing_test 缺少 title，验证器正确删除它并留下说明；publisher 却把“没有有效 finding”当成“没有缺口”，返回 complete，并在 issue 状态写 covered。
-- **Fix:** 将验证失败关联回具体 unit，使其保持 unknown/未完成，不推进 covered 或确认次数；补一个经过 validate → verify → publish → readState 的用例。
-- **If we skip it:** 模型一次结构错误就能从扫描待办中洗掉一个缺口，之后轮转还会把它当作已审查。main、#198 均复现。
+- **What this is:** `src/audit-post.js:150–169` validates the unit finding; `383–386` derives the unit state from the retained findings; `752–760` publishes and persists.
+- **Problem:** The only missing_test of a selected unit lacks a title; the validator correctly deletes it and leaves a note; the publisher, however, treats "no valid finding" as "no gap", returns complete, and writes covered into the issue state.
+- **Fix:** Link the validation failure back to the specific unit so that it stays unknown/incomplete, and does not advance covered or the confirmation count; add a case that goes through validate → verify → publish → readState.
+- **If we skip it:** A single structural error by the model can wash a gap out of the scan's to-do list, and later rotation will treat it as reviewed. Reproduced on both main and #198.
 
-证据：附录 B `P5_invalid_finding`，说明确实可见，但输出 `complete`、持久状态 `covered`。因此仅增加可见 warning 不足以修复。
+Evidence: Appendix B `P5_invalid_finding`; the note is indeed visible, but the output is `complete` and the persisted state is `covered`. So merely adding a visible warning is not enough to fix it.
 
-### 3. [P1] F21：需求 cid 没有绑定其自己的 source block
+### 3. [P1] F21: A requirement cid is not bound to its own source block
 
-- **What this is:** `src/audit-post.js:228–238` 验证 source 位于获准文档、引用存在，再用 cid 找 heading。
-- **Problem:** A 要求拒绝负数，B 要求接受正数；两个合法 cid 都引用 B 和同一个正数断言，验证后两个都 covered，且无 warning。来源真实不等于来源属于这个需求。
-- **Fix:** 将 source 绑定候选的文档和 block 范围；对 bundled block 的 `.N` 子项使用同一父 block 边界。错配行归回其 cid 的 unknown，不能用另一条需求补齐。
-- **If we skip it:** 正向 happy path 能冒充负向边界的测试，R→T 追溯看起来完整，实际核心目标漏检。main、#198 均复现。
+- **What this is:** `src/audit-post.js:228–238` validates that the source is in an approved document and the citation exists, and then uses the cid to find the heading.
+- **Problem:** A requires rejecting negative numbers, B requires accepting positive numbers; both legal cids cite B and the same positive-number assertion, and after validation both are covered, with no warning. A real source does not mean the source belongs to this requirement.
+- **Fix:** Bind the source to the candidate's document and block range; for the `.N` sub-items of a bundled block, use the boundary of the same parent block. A mismatched row goes back to the unknown of its own cid, and must not be filled in with another requirement.
+- **If we skip it:** A positive happy path can pass for the test of a negative boundary; R→T traceability looks complete, while the core goal is actually missed. Reproduced on both main and #198.
 
-证据：附录 B `P4_requirement_identity`，`aaaaaaaa`、`bbbbbbbb` 都指向 `B.md`，两行 `covered`，warnings 为空。
+Evidence: Appendix B `P4_requirement_identity`; `aaaaaaaa` and `bbbbbbbb` both point to `B.md`, both rows are `covered`, and warnings are empty.
 
-### 4. [P1] F22：分片 cursor 在内容或布局变化后仍继续使用
+### 4. [P1] F22: The shard cursor is still used after the content or the layout changes
 
-- **What this is:** `src/audit-units.js:63–68` 的 partOf 使用整数 cursor；state 中虽然有 `uv`，但它没有在这里使旧 cursor 失效。
-- **Problem:** main 的 600 行样本先读 1–300，修改第 1 行后继续 301–600，最终 covered，却未重读修改行。#198 上同一内容变成三片，仍复现；另将 `max_units` 从 12 改为 1，同一 cursor 的解释从“下一片 121 起”变为“201 起”，121–200 从未读取。
-- **Fix:** 内容版本变化时清空进度；预算改变导致布局变化时也重置，或持久化可验证的布局/范围。最小修复优先重置，不必先建立复杂覆盖账本。
-- **If we skip it:** 多轮扫描“读完了文件”只在不同版本、不同布局的拼接意义上成立，当前版本可以漏段仍显示 covered。布局改变反例属于 #198，不能误写为 main 的自适应分片行为。
+- **What this is:** partOf in `src/audit-units.js:63–68` uses an integer cursor; although the state contains `uv`, it does not invalidate the old cursor here.
+- **Problem:** In main, a 600-line sample first reads 1–300, then after line 1 is modified continues with 301–600, ends up covered, and never re-reads the modified line. On #198 the same content becomes three parts and still reproduces; furthermore, changing `max_units` from 12 to 1 changes the interpretation of the same cursor from "the next part starts at 121" to "starts at 201", and 121–200 are never read.
+- **Fix:** Clear the progress when the content version changes; reset also when a budget change alters the layout, or persist a verifiable layout/range. The minimal fix prefers reset, with no need to build a complex coverage ledger first.
+- **If we skip it:** "Finished reading the file" over multiple scan rounds holds only in the sense of splicing together different versions and different layouts; the current version can miss a segment and still show covered. The layout-change counterexample belongs to #198 and must not be mistaken for main's adaptive sharding behavior.
 
-证据：附录 B `P1_cursor_after_edit`；#198 的原始反例 `P2_cursor_after_budget_change`：`1–120 → 201–400`，未读区间 `[121,200]`。
+Evidence: Appendix B `P1_cursor_after_edit`; the original counterexample of #198 `P2_cursor_after_budget_change`: `1–120 → 201–400`, with unread range `[121,200]`.
 
-### 5. [P1] F25（新增）：需求运算符变化被当成同一个已覆盖需求
+### 5. [P1] F25 (new): A requirement operator change is treated as the same already-covered requirement
 
-- **What this is:** `src/audit-collect.js:69,91` 对 block 文本先转小写，再把所有非字母数字字符归为空格，作为 cid 的哈希输入；`113` 用 cid 判断新改需求。
-- **Problem:** `Service must accept amounts >= 10.` 改为 `> 10.`，cid 仍是 `090622e0`。在一条旧 gap 待确认、每轮只选 1 条的样本中，collect 选择旧 gap，将已改变的边界要求 carry；stateOf 仍保留其 covered。代码和测试没有改，所以证据版本检测也不能替代需求版本检测。
-- **Fix:** cid 的内容归一化只忽略无语义格式，不丢弃运算符、符号、大小写敏感字面量；迁移时使已有覆盖状态重新接受审查。为 `>= → >`、`-1 → 1`、大小写敏感值增加状态级用例，而非只测 hash 函数。
-- **If we skip it:** “只改需求、CI 仍绿”的边界错误不会获得 changed 优先级，还携带旧的放心状态。这正是 shift-left 应优先发现的变化；后续普通轮转可能发现，不能描述成永远不会再扫描。
+- **What this is:** `src/audit-collect.js:69,91` lowercases the block text and then turns all non-alphanumeric characters into spaces as the hash input of the cid; `113` uses the cid to decide on newly changed requirements.
+- **Problem:** `Service must accept amounts >= 10.` changed to `> 10.` still has cid `090622e0`. In a sample with one old gap awaiting confirmation and only 1 selected per round, collect picks the old gap and carries the changed boundary requirement; stateOf still keeps its covered. The code and the tests are unchanged, so evidence-version detection cannot replace requirement-version detection either.
+- **Fix:** The content normalization of the cid ignores only semantically meaningless formatting, and does not discard operators, symbols and case-sensitive literals; on migration, make the existing coverage state go through review again. Add state-level cases for `>= → >`, `-1 → 1` and case-sensitive values, rather than testing only the hash function.
+- **If we skip it:** A boundary error where "only the requirement changed and CI stays green" does not get changed priority and also carries the old reassuring state. This is exactly the kind of change shift-left should find first; later ordinary rotation might find it, which cannot be described as never being scanned again.
 
-证据：附录 A `N1-semantic-requirement-change`。比较运算符反例在 main 和 #198 均执行通过；其余符号变化是建议验收向量，不冒充本次已运行证据。
+Evidence: Appendix A `N1-semantic-requirement-change`. The comparison-operator counterexample executed and passed on both main and #198; the other symbol changes are suggested acceptance vectors, and do not pass for evidence run this time.
 
-### 6. [P1] F27（新增）：读后半段代码，却只打包前 40 个符号的测试
+### 6. [P1] F27 (new): Reads the later half of the code but packs the tests of only the first 40 symbols
 
-- **What this is:** `src/engines/claude-api.js:222–224` 的 unitSymbols 从整文件开头取最多 40 个符号；源码打包单独遵守 unitPart，测试切片却仍用整文件符号。
-- **Problem:** 一个 200 个函数的文件，真实 inventory 本轮选中源码范围 101–200。pack 有 `unit170` 的实现，却没有其实际存在的 `assert.equal(unit170(...))`；它装入了前半段测试，`notWhole=[]`。slices 的“complete”只证明它选到的符号的测试读完，并不证明本轮源码的测试读完。
-- **Fix:** 根据当前 part 提取符号，再选择测试窗口；符号上限、别名或切片不能涵盖当前范围时传播 unknown/cut。用带真实后半段断言的大测试文件验证，不能只断言源码窗口装得下。
-- **If we skip it:** 可能把已有测试报成缺失，或接受缺乏相关上下文的无缺口结论。实测证明的是证据丢失和完整性标记错误，未调用真实模型来声称必然生成某条误报。
+- **What this is:** unitSymbols at `src/engines/claude-api.js:222–224` takes up to 40 symbols from the start of the whole file; source packing obeys unitPart separately, while the test slicing still uses the whole-file symbols.
+- **Problem:** For a file with 200 functions, the real inventory selects source range 101–200 this round. The pack has the implementation of `unit170` but not the `assert.equal(unit170(...))` that actually exists; it loads the first half of the tests, and `notWhole=[]`. The slices' "complete" only proves that the tests of the symbols it selected were read completely; it does not prove that the tests of this round's source were read completely.
+- **Fix:** Extract the symbols from the current part first, and then choose the test windows; when the symbol cap, aliases or slices cannot cover the current range, propagate unknown/cut. Verify with a large test file that has real second-half assertions; it is not enough to assert only that the source window fits.
+- **If we skip it:** Existing tests may be reported as missing, or a no-gap conclusion lacking the relevant context may be accepted. What was measured proves loss of evidence and a wrong completeness marker; no real model was called to claim that some false positive is certain to be generated.
 
-证据：附录 A `N3-current-part-test-slices`；main、#198 均为 `currentSourceVisible=true`、`currentAssertionVisible=false`、`notWhole=[]`。
+Evidence: Appendix A `N3-current-part-test-slices`; main and #198 both have `currentSourceVisible=true`, `currentAssertionVisible=false`, `notWhole=[]`.
 
-### 7. [P1] F28（新增）：20 条需求时丢掉证据正文，21 条反而能读到
+### 7. [P1] F28 (new): With 20 requirements the evidence body is dropped, while with 21 it can be read
 
-- **What this is:** `src/scan-parts.js:15` 在候选不超过 batch 时返回 null；`claude-api.js:179–249` 的常规 contextPack 不按 `audit-evidence.txt` 装载需求证据文件。多批路径则显式用 windowPack 装载。
-- **Problem:** 手工构造 `audit-evidence.txt`、引用 `config/policy.yaml` 且没有对应入选 code unit 的样本，20 条候选时正文未进入 pack，`notWhole=[]`；21 条时相同证据被 block-part 正确装入。这个样本隔离验证消费者的打包差异，不证明自动 collector 会检出该 YAML。证据候选中的短摘要不能代替上下文，API 模型又没有文件工具补读。
-- **Fix:** 单批与多批共用 block evidence 的装载/缺失记录；只有一批时也执行同样的上下文规则。测试 batch−1、batch、batch+1，要求同一 obligation 所需证据的可见性不受这一阈值影响。
-- **If we skip it:** 小文档反而更容易缺少验证材料。若模型遵守提示会降低可检出率；若模型直接判定，后处理也缺少 blockCuts 来强制收敛为 unknown。
+- **What this is:** `src/scan-parts.js:15` returns null when the candidates do not exceed the batch; the regular contextPack in `claude-api.js:179–249` does not load the requirement evidence files according to `audit-evidence.txt`. The multi-batch path explicitly loads them with windowPack.
+- **Problem:** In a hand-constructed sample with `audit-evidence.txt` citing `config/policy.yaml` and with no corresponding selected code unit, at 20 candidates the body does not enter the pack, and `notWhole=[]`; at 21 the same evidence is correctly loaded by the block-part path. This sample isolates and verifies the consumer's packing difference; it does not prove the automatic collector would detect that YAML. The short digest in the evidence candidates cannot substitute for the context, and the API model has no file tool to read it again.
+- **Fix:** Single-batch and multi-batch share the loading/missing records of block evidence; when there is only one batch, the same context rule is also applied. Test batch−1, batch and batch+1, requiring that the visibility of the evidence needed by the same obligation is not affected by this threshold.
+- **If we skip it:** Small documents are in fact more likely to lack verification material. If the model obeys the prompt, the detection rate drops; if the model judges directly, post-processing also lacks blockCuts to force convergence to unknown.
 
-证据：附录 A `N4-evidence-at-batch-boundary`。main、#198 均复现上述手工输入的打包差异。**2026-10-16 更正：** 原文称“evidence search 已明确找到了它”不准确；collector 的 `NOT_EVIDENCE` 会排除 YAML/JSON。后续[调研报告第 6 节及 Q8](research-repo-audit-requirements-chunking-2026-10-16.md#6-对上一报告-f28-的证据更正与补强) 使用真实 collector 产出的 JavaScript 证据，在 main 复现默认单批 pack 缺正文且 `notWhole=[]`，补强 F28 的核心问题；没有把这个新实验说成重新验证了 #198。
+Evidence: Appendix A `N4-evidence-at-batch-boundary`. Both main and #198 reproduce the packing difference of the hand-built input above. **Correction 2026-10-16:** the original statement that "evidence search has clearly found it" was inaccurate; the collector's `NOT_EVIDENCE` excludes YAML/JSON. The later [research report section 6 and Q8](research-repo-audit-requirements-chunking-2026-10-16.md#6-evidence-correction-and-reinforcement-for-f28-in-the-previous-report) uses JavaScript evidence produced by the real collector, reproduces on main that the default single-batch pack lacks the body with `notWhole=[]`, and reinforces the core problem of F28; that new experiment is not described as having re-verified #198.
 
-### 8. [P1] F23：#198 的源码装包保证没有保证扫描进度
+### 8. [P1] F23: The source packing guarantee of #198 does not guarantee scan progress
 
-- **What this is:** #198 `c77841d` 让多个 unit 的源码片段优先进入 pack；`src/audit-post.js:739,759–760` 在任一 matched test 被裁掉时不推进对应 unit。
-- **Problem:** 8 个 unit、各约 23 KB 测试及规则文档、250,000-byte pack 的固定样本，源码裁剪 0，测试裁剪 8，unseen unit 8，写入状态 0。再次 inventory 选到完全相同的 unit 和 part。
-- **Fix:** 以能完成一个 unit 的“源码范围＋相关测试＋规则”分配预算，减少本轮选中数量，或使完整上下文分批推进；对同样输入不能无提示地无限重试原片。不要为了推进 cursor 忽略未读测试。
-- **If we skip it:** 源码 pack 测试全绿，定时扫描却重复花费预算而不扩大审查范围。此项报告的是最新 #198 的修复边界，不声称 main 已采用该源码优先算法。
+- **What this is:** #198 `c77841d` lets the source fragments of multiple units enter the pack first; `src/audit-post.js:739,759–760` does not advance the corresponding unit when any matched test is cut.
+- **Problem:** In a fixed sample of 8 units, each with about 23 KB of tests plus a rules document, and a 250,000-byte pack: source cut 0, test cut 8, unseen units 8, written state 0. The next inventory selects exactly the same units and parts.
+- **Fix:** Allocate the budget by the "source range + related tests + rules" that can complete one unit, reduce the number selected this round, or advance the full context in batches; for the same input, endless retry of the same piece without any notice is not acceptable. Do not ignore unread tests in order to advance the cursor.
+- **If we skip it:** The source-pack test is all green, while the scheduled scan repeatedly spends budget without widening the review scope. This item reports the fix boundary of the latest #198, and does not claim main has adopted that source-first algorithm.
 
-证据：在 #198 导出源码执行上一报告完整脚本，`P7_scan_stall={sourceFilesCut:0,testFilesCut:8,unseenUnits:8,stateBlocks:0,samePartsNextRun:true}`。
+Evidence: running the complete script of the previous report on the exported source of #198, `P7_scan_stall={sourceFilesCut:0,testFilesCut:8,unseenUnits:8,stateBlocks:0,samePartsNextRun:true}`.
 
 ## 4. Should fix
 
-### 9. [P2] F26（新增）：配置的测试位置到了验证器又不算测试
+### 9. [P2] F26 (new): A configured test location is not counted as a test again by the validator
 
-- **What this is:** `audit-collect.js:44–60` 和 `audit-units.js:85–89` 接受 authoritative `test_paths`；`audit-post.js:36,231–232,283` 却只按文件名启发式判断。
-- **Problem:** 配置 `qa/checks/**`，collect 把 `qa/checks/amount.js` 识别并匹配为测试；真实有效的 `assert.equal(amount(10), true)` 到 verify 被删除，covered 降为 unknown。weak_test/pushdown 引用同类路径也面对同一分类边界。
-- **Fix:** 把相同的 testScope 传到 verify/verifyUnits 和 cover guard；配置存在时统一采用 owner 的范围与排除规则。增加从 action 配置一直走到最终 verdict 的非标准目录用例。
-- **If we skip it:** 用户已经显式告诉系统测试在哪里，系统仍无法承认这些证据；漏掉弱测试反馈、长期 unknown 和重复人工解释会损害采用率。已复现的是 covered→unknown，不将它夸大为 false covered。
+- **What this is:** `audit-collect.js:44–60` and `audit-units.js:85–89` accept the authoritative `test_paths`; `audit-post.js:36,231–232,283` judges only by a file-name heuristic.
+- **Problem:** With `qa/checks/**` configured, collect recognizes and matches `qa/checks/amount.js` as a test; the genuinely valid `assert.equal(amount(10), true)` is deleted at verify, and covered drops to unknown. weak_test/pushdown references to similar paths face the same classification boundary.
+- **Fix:** Pass the same testScope to verify/verifyUnits and the cover guard; when a configuration exists, uniformly adopt the owner's scope and exclusion rules. Add a non-standard-directory case that goes from the action configuration all the way to the final verdict.
+- **If we skip it:** The user has explicitly told the system where the tests are, and the system still cannot recognize that evidence; missed weak-test feedback, long-term unknown and repeated manual explanations will hurt adoption. What is reproduced is covered→unknown, and it is not exaggerated into a false covered.
 
-证据：附录 A `N2-authoritative-test-paths`，main、#198 均 `collectorMatchedTest=true`、`verifiedTests=0`。
+Evidence: Appendix A `N2-authoritative-test-paths`; main and #198 both have `collectorMatchedTest=true`, `verifiedTests=0`.
 
-### 10. [P2] F29（新增）：同一发现的摘要与证据表各算一次 TP
+### 10. [P2] F29 (new): The summary and the evidence table each count one TP for the same finding
 
-- **What this is:** `eval/grade.js:97–104` 把 summary item 和 coverage row 各做一个候选；`usedHits` 只限制候选使用次数，没有关联同一 finding 的两种展示。
-- **Problem:** 使用真实 `post.buildSummary` 生成一个 missing_test，它自然同时显示在正文和义务表。期望有 A、B 两个缺口时，grade 得到 `tp=2,fn=0,pass=true`；去掉同一发现的镜像表格，变成 `tp=1,fn=1`。summary 允许按 path/kind 匹配且不执行同样的行距约束，使 B 能吃掉 A 的镜像。
-- **Fix:** 一项逻辑 finding 只有一个匹配身份；当正文已代表该义务时，表格不能再作为独立命中。保留摘要落点容错，但要求身份/行为匹配，不能只凭同路径和类型；内联与摘要也需检查重复呈现。
-- **If we skip it:** UI 展示变化能虚增 recall/pass，团队据此宣称 shift-left 改善并不可信。这是评估器 bug，不是已观测到真实业务指标被提高的声明。
+- **What this is:** `eval/grade.js:97–104` makes a candidate of each of the summary item and the coverage row; `usedHits` only limits how many times a candidate is used and does not link the two presentations of the same finding.
+- **Problem:** Using the real `post.buildSummary` to generate one missing_test, it naturally shows up in both the body and the obligation table. When two gaps A and B are expected, grade gets `tp=2,fn=0,pass=true`; remove the mirrored table of the same finding and it becomes `tp=1,fn=1`. The summary allows matching by path/kind and does not apply the same line-distance constraint, so B can eat A's mirror.
+- **Fix:** One logical finding has only one matching identity; when the body already represents the obligation, the table can no longer be an independent hit. Keep the summary landing-position tolerance, but require identity/behavior matching, not just the same path and type; inline and summary also need a check for duplicate presentation.
+- **If we skip it:** A change in UI presentation can inflate recall/pass, and a team claiming shift-left has improved on that basis is not credible. This is an evaluator bug, not a statement that a real business metric was observed to be raised.
 
-证据：附录 A `N5-mirrored-summary-double-count`。main、#198 均复现；不是手写一个并不存在的输出格式。
+Evidence: Appendix A `N5-mirrored-summary-double-count`. Reproduced on both main and #198; it is not a hand-written output format that does not exist.
 
-### 11. [P2] F24：跨仓 issue 发布与前一轮状态读取指向不同仓库
+### 11. [P2] F24: Cross-repo issue publishing and the previous round's state reading point to different repositories
 
-- **What this is:** action 的 scan publisher 支持 `scan_issue_repo`/单独 token；`src/audit-collect.js:292–308` 的 loadPrior 只按源仓库、默认 scope 查找。
-- **Problem:** 源仓 `org/source`、目标 `org/reports`，此前状态存在目标 issue 中；实际 loader 只请求 `/repos/org/source/issues` 并返回 null。即使直接向 loader 提供 `ISSUE_REPO` 也不会使用；action 的采集步骤还没有把该目标和 token 传进来。
-- **Fix:** 采集与发布共用目标解析、scope/title 和目标读取凭证；验证源仓→目标仓的完整闭环，保持已有 visibility guard。
-- **If we skip it:** 发布的报告看起来成功，下一轮仍从前排重新开始；风险较低的尾部长期得不到审查，多源仓共用报告仓时还需正确区分来源身份。
+- **What this is:** The action's scan publisher supports `scan_issue_repo` / a separate token; loadPrior at `src/audit-collect.js:292–308` looks up only by the source repository and the default scope.
+- **Problem:** With source repo `org/source` and target `org/reports`, and the prior state stored in the target issue, the actual loader requests only `/repos/org/source/issues` and returns null. Even supplying `ISSUE_REPO` directly to the loader does not use it; the action's collection step also does not pass in that target and token.
+- **Fix:** Collection and publishing share the target resolution, scope/title and the target read credentials; verify the complete closed loop from source repo to target repo, keeping the existing visibility guard.
+- **If we skip it:** The published report looks successful, yet the next round again starts from the front; the lower-risk tail gets no review for a long time, and when multiple source repos share one report repo the source identity also has to be told apart correctly.
 
-证据：附录 B `P3_external_state`。所有 HTTP 均为 mock，未向任何真实仓库写 issue。main、#198 均复现。
+Evidence: Appendix B `P3_external_state`. All HTTP is mocked, and no issue was written to any real repository. Reproduced on both main and #198.
 
-## 5. 从发现到可验收修复
+## 5. From findings to acceptable fixes
 
-不需要先重构整个系统。建议按下面的依赖顺序提交小修复，每一步都保留证明错误行为的反例：
+The whole system need not be refactored first. It is suggested to submit small fixes in the dependency order below, each step keeping the counterexample that proves the wrong behavior:
 
-| 顺序 | 必须成立的验收条件 | 对应发现 |
+| Order | Acceptance condition that must hold | Corresponding findings |
 |---|---|---|
-| 1：结论可信 | 有义务相关的未读证据/无效输出时，不写完整缓存或 covered；有效局部发现仍保留 | F19、F20 |
-| 2：身份与版本 | A 不能借 B 的 source 覆盖；需求契约改变要重新审；内容或布局改变不能沿用旧进度 | F21、F22、F25 |
-| 3：能看到也能推进 | 当前源码片段的实际测试被读到；batch 阈值前后证据规则相同；默认 pack 下多轮能扩大审查范围 | F23、F27、F28 |
-| 4：配置闭环 | 非标准测试目录的配置在最终验证仍生效；状态读写同一目标、同一来源身份 | F24、F26 |
-| 5：度量可信 | 同一 finding 的镜像、摘要/内联转换不改变 TP/FP/FN；缺失 B 不能用 A 的第二个展示补齐 | F29 |
+| 1: trustworthy conclusion | When there is unread evidence / invalid output related to an obligation, no complete cache or covered is written; valid local findings are still kept | F19, F20 |
+| 2: identity and version | A cannot be covered by borrowing B's source; a changed requirement contract must be reviewed again; a content or layout change cannot reuse old progress | F21, F22, F25 |
+| 3: can see it and can advance | The actual tests of the current source fragment are read; the evidence rule is the same before and after the batch threshold; under the default pack multiple rounds can widen the review scope | F23, F27, F28 |
+| 4: configuration closed loop | The configuration of a non-standard test directory still takes effect in the final validation; state is read and written for the same target and the same source identity | F24, F26 |
+| 5: trustworthy metrics | A mirror of the same finding, or a summary/inline conversion, does not change TP/FP/FN; a missing B cannot be filled in with A's second presentation | F29 |
 
-用于继续挖掘 unknown unknown 的组合，不是仅补每个 happy path：
+Combinations for continuing to dig for unknown unknowns, not just filling in each happy path:
 
-- **语义变化与无关变化分离：** 空白变动可以保持身份；运算符/否定/大小写敏感字面量变动必须触发审查。代码和测试不变也是必测状态。
-- **单调性：** 缩小预算/删除证据只能使结论更不确定，不能提高 complete；增加展示副本不能提高 TP；完成下一轮应能指出新增审查范围。
-- **身份互换：** 交换两个合法 cid 的 source、交换两个测试路径、搬到 owner 明确配置的目录，分别验证错误引用被拒绝、等价配置被接受。
-- **边界组合：** 第 40/41 个符号、20/21 个 block、最后一片、新 commit、预算变化、部分输出坏掉；组合比只测单个上限更重要。
-- **时序：** 发布成功但下轮读不到状态、原 issue 关闭/重开、旧版本被 supersede。现有 guard 不能替代逐个跨步骤契约的检查。
+- **Separate semantic changes from irrelevant ones:** whitespace changes may keep the identity; changes to operators / negation / case-sensitive literals must trigger review. The state where the code and the tests are unchanged also must be tested.
+- **Monotonicity:** shrinking the budget / deleting evidence can only make the conclusion more uncertain and cannot raise complete; adding display copies cannot raise TP; completing the next round should be able to point to the newly added review scope.
+- **Identity swap:** swap the sources of two legal cids, swap two test paths, move to a directory explicitly configured by the owner, and verify respectively that the wrong citation is rejected and the equivalent configuration is accepted.
+- **Boundary combinations:** the 40th/41st symbol, 20/21 blocks, the last part, a new commit, a budget change, partially broken output; combinations matter more than testing a single limit.
+- **Timing:** publishing succeeds but the next round cannot read the state, the original issue is closed/reopened, an old version is superseded. The existing guards cannot replace checking each cross-step contract one by one.
 
-完成这些修复后仍要验证实际 goal，而非将全部测试通过等同于 shift-left 已有效：固定代表性历史 QA/生产缺陷、只使用引入 PR 当时可得的 R/C/T/S，盲评是否命中可行动缺口；另测正常 PR 的噪声、开发者真实采纳/修复比例、反馈时点、延迟和成本。将“改过相关行”与“行为反例已被测试阻止”分别记账。离线 seeded/replay 与真实采用者结果必须分别报告。
+After these fixes are complete, the actual goal still has to be verified, rather than equating all tests passing with shift-left being effective: pin representative historical QA/production defects, use only the R/C/T/S available at the time of the introducing PR, and blind-grade whether an actionable defect is hit; separately measure the noise on normal PRs, the real developer adoption/fix ratio, the feedback timing, latency and cost. Record "related line changed" and "behavior counterexample is now blocked by a test" separately. Offline seeded/replay results and real adopter results must be reported separately.
 
-这部分是验收计划，不是已经跑过的 pilot，也不建议为了验证报告直接调用付费模型或在采用者仓库发布评论。
+This part is an acceptance plan, not a pilot that has been run, and it is not recommended to call a paid model directly or post comments in an adopter's repository just to verify the report.
 
-## 6. 实际验证与限制
+## 6. Actual verification and limits
 
-- 基线环境：Windows、Node `v26.11.1`；仓库 CI 使用 Ubuntu、Node 22。首次执行 `node --test --test-reporter=tap --test-concurrency=3 src/*.test.js bin/*.test.js eval/*.test.js`：**1085 tests，1061 pass，21 fail，2 skipped，1 todo**。
-- 默认 `bash` 指向 `C:\Windows\System32\bash.exe`。多项 shell 测试明确失败于 `/bin/bash: C:/.../src/collect.sh: No such file or directory`；没有把这些环境失败写成产品漏洞。
-- 将 Git for Windows 的 `bin`、`usr/bin` 放到本进程 PATH 前面后，复跑相关文件：第一组 **62/62 pass**；第二组 **25 tests，24 pass，0 fail，1 todo**。单独复跑首轮失败的 `fixture tr14 in CRLF`：**1/1 pass**，首轮该例耗时约 122 秒，独立复跑约 7 秒；证据支持负载/时限相关，不据此断言已证明根因。
-- 最后补跑 `eval/local.test.js`：**10/10 pass**。四组复测合计 **98 tests，97 pass，0 fail，1 todo**；这包含对照测试，不是 98 项首轮失败。
-- 逐项比对首轮失败的 test name：21 项意外失败均在上述复测中通过；未把被跳过或 TODO 的项计入这 21 项。
-- TODO 是仓库既有的 `k2 toolbox (wanted): the has() claim is not posted as a weak test`，注明无确定性 weak_test guard、依赖模型；它不能算修好了，也不能算意外失败。
-- main：附录 A 的 **5/5** 新反例和附录 B 的 **5/5** 旧反例均复现。#198 固定导出：同样 **5/5** 新反例和上一报告完整脚本 **7/7** 反例均复现。反例通过意味着成功证明当前错误行为，**不是产品测试通过或修复通过**。
-- 没有重跑整套 Ubuntu/Node 22 CI；没有把复测结果拼接伪装成一次全绿全套运行。没有执行真实 Claude/Copilot 模型、付费评估、真实 PR 评论或跨仓 issue 发布。未逐一深审全部历史 fixture/研究文档，也没有证明全部安全边界无漏洞。
+- Baseline environment: Windows, Node `v26.11.1`; the repository CI uses Ubuntu, Node 22. First execution of `node --test --test-reporter=tap --test-concurrency=3 src/*.test.js bin/*.test.js eval/*.test.js`: **1085 tests, 1061 pass, 21 fail, 2 skipped, 1 todo**.
+- The default `bash` points to `C:\Windows\System32\bash.exe`. Several shell tests fail explicitly with `/bin/bash: C:/.../src/collect.sh: No such file or directory`; these environment failures were not written up as product vulnerabilities.
+- After putting Git for Windows's `bin` and `usr/bin` in front of this process's PATH and re-running the related files: the first group **62/62 pass**; the second group **25 tests, 24 pass, 0 fail, 1 todo**. Re-running the `fixture tr14 in CRLF` that failed in the first round on its own: **1/1 pass**; in the first round this case took about 122 seconds, and re-run alone about 7 seconds; the evidence supports load/time-limit relatedness, and it is not asserted that the root cause has been proven.
+- Finally `eval/local.test.js` was added: **10/10 pass**. The four re-test groups total **98 tests, 97 pass, 0 fail, 1 todo**; this includes control tests and is not 98 first-round failures.
+- Comparing the first-round failing test names one by one: all 21 unexpected failures passed in the re-tests above; skipped or TODO items are not counted in these 21.
+- The TODO is the repository's existing `k2 toolbox (wanted): the has() claim is not posted as a weak test`, noting there is no deterministic weak_test guard and that it depends on the model; it cannot be counted as fixed, nor as an unexpected failure.
+- main: the **5/5** new counterexamples of Appendix A and the **5/5** old counterexamples of Appendix B all reproduce. #198 pinned export: the same **5/5** new counterexamples and the **7/7** counterexamples of the previous report's complete script all reproduce. A counterexample passing means it successfully proves the current wrong behavior; **it is not the product's tests passing or a fix passing**.
+- The full Ubuntu/Node 22 CI was not re-run; the re-test results were not spliced together to pose as one all-green full-suite run. No real Claude/Copilot model, paid evaluation, real PR comment or cross-repo issue publishing was executed. Not every historical fixture/research document was reviewed in depth one by one, and it is not proven that all security boundaries are free of holes.
 
-下面附实际执行脚本与输出摘要，便于修改后反向设置预期，建立真正能阻止回归的测试。脚本在临时 Git 仓库中构造数据，mock GitHub；清理前检查临时目录边界，不触碰用户工作分支。
+Below are the scripts actually executed and a summary of their output, so that after a modification the expectations can be reversed to build tests that truly prevent regression. The scripts construct data in temporary Git repositories and mock GitHub; the temporary-directory boundary is checked before cleanup, and the user's working branch is not touched.
 
-## 7. 可执行复现
+## 7. Executable reproduction
 
-在上述固定 main checkout 根目录保存附录脚本为指定 `.cjs` 文件后执行 `node 文件名.cjs`。新反例脚本可直接用于固定 #198 源码；附录 B 是针对 main 两片布局调整后的版本。#198 的七项完整脚本可从上一份固定提交报告的附录原样提取执行，不能把 main 的两片期望硬套到 #198 三片布局。
+Save the appendix script as the named `.cjs` file at the root of the pinned main checkout above, then run `node filename.cjs`. The new-counterexample script can be used directly on the pinned #198 source; Appendix B is the version adjusted for main's two-part layout. The full seven-item script for #198 can be extracted verbatim from the appendix of the previous pinned-commit report and run; main's two-part expectations must not be forced onto #198's three-part layout.
 
-### 附录 A：新增反例（保存为 audit-new.cjs）
+### Appendix A: New counterexamples (save as audit-new.cjs)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand script or results</summary>
 
 ```javascript
 const fs = require('node:fs');
@@ -305,10 +305,10 @@ console.log(JSON.stringify(results, null, 2));
 
 </details>
 
-### 附录 A 实际结果（main）
+### Appendix A actual results (main)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand script or results</summary>
 
 ```json
 [
@@ -359,10 +359,10 @@ console.log(JSON.stringify(results, null, 2));
 
 </details>
 
-### 附录 B：main 旧问题复验（保存为 audit-main.cjs）
+### Appendix B: re-verification of old main problems (save as audit-main.cjs)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand script or results</summary>
 
 ```javascript
 const fs = require('node:fs');
@@ -484,10 +484,10 @@ run().catch(e => { console.error(e.stack); process.exitCode = 1; }).finally(() =
 
 </details>
 
-### 附录 B 实际结果（main）
+### Appendix B actual results (main)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand script or results</summary>
 
 ```json
 {
@@ -562,10 +562,10 @@ run().catch(e => { console.error(e.stack); process.exitCode = 1; }).finally(() =
 
 </details>
 
-### 附录 C：#198 完整复验实际结果
+### Appendix C: actual results of the full #198 re-verification
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand script or results</summary>
 
 ```json
 {
@@ -668,6 +668,6 @@ run().catch(e => { console.error(e.stack); process.exitCode = 1; }).finally(() =
 
 ## 8. Verdict
 
-**Verdict:** 先修错误放心与状态失真，再修证据完整性、扫描进度和度量身份。当前实现已具备多层防护，但尚不能凭“测试多、报告完整、源码装得下”确认 goal 达成。本文交付的是可复现审计和验收依据，11 项产品问题仍待修复。
+**Verdict:** First fix false reassurance and state distortion, then evidence completeness, scan progress and metric identity. The current implementation already has several layers of protection, but "many tests, a complete report, source that fits" cannot yet be used to confirm the goal is achieved. This document delivers a reproducible audit and the basis for acceptance; the 11 product problems are still to be fixed.
 
-**Not checked:** 真实采用者 pilot、线上模型行为、Ubuntu/Node 22 全套重跑，以及每个历史 fixture 的逐行审计。没有删除/合并代码建议，因此不报告虚构的行数或依赖节省。
+**Not checked:** a real adopter pilot, online model behavior, a full re-run on Ubuntu/Node 22, and a line-by-line audit of every historical fixture. There is no suggestion to delete/merge code, so no made-up line counts or dependency savings are reported.

@@ -1,28 +1,28 @@
-# 第三方复杂仓库全仓 audit 评测与优化（2026-10-17）
+# Full-repository audit evaluation and optimization on complex third-party repositories (2026-10-17)
 
-基线：main `2fb6f91`（#258 之后）。所有数字来自本日真实运行或离线可复跑的种子评测，附运行 ID 或文件位置。推算值单独标注，没测的写明“未测”。
+Baseline: main `2fb6f91` (after #258). All numbers come from real runs made today or from seeded evaluations that can be re-run offline, with the run ID or file location attached. Extrapolated values are marked separately, and anything not measured is written as "not measured".
 
-## 0. 结论
+## 0. Conclusions
 
-| 问题 | 结论 | 证据 |
+| Question | Conclusion | Evidence |
 |---|---|---|
-| 全仓 audit 能否在多语言大仓库上跑完 | **能**：5 个仓库全绿，$0.03–$0.20/次，27–48 秒模型时间 | §2 |
-| 模型发现是否有价值 | **没有**：计入的 8 条发现中有价值的是 0 条；其中 6 条对应的测试其实存在，只是不在匹配到的测试文件里 | §3 |
-| 确定性静态信号的召回 | **在 delivered（可见前 20 行）口径下只有 11/40**；不设上限时 21/40；边界类 0/10 | §4 |
-| 静态信号的精确率 | weak 线索抽样 23 条里有 18 条判错；unref 线索在 cobra（Go）上 6/10 为真缺口，在 flask 和 fastify 上主要是“经由别的入口已测” | §4.3 |
-| 覆盖率的瓶颈 | **预算预检偏高约 25 倍**：每次都显示“$1 只够 4–5 次调用”，实际只花了 $0.03–$0.20 | §2.2 |
+| Can the full-repository audit finish on large multi-language repositories | **Yes**: all 5 repositories were green, $0.03–$0.20 per run, 27–48 seconds of model time | §2 |
+| Are the model findings valuable | **No**: of the 8 counted findings, 0 are valuable; 6 of them correspond to tests that do exist, just not in the matched test files | §3 |
+| Recall of deterministic static signals | **Only 11/40 under the delivered (first 20 visible lines) definition**; 21/40 with no cap; boundary class 0/10 | §4 |
+| Precision of static signals | In a sample of 23 weak leads, 18 were judged wrong; unref leads on cobra (Go) were 6/10 real gaps, while on flask and fastify they were mainly "already tested through another entry point" | §4.3 |
+| Bottleneck of coverage | **The budget pre-check is about 25 times too high**: every run shows "$1 allows only 4–5 calls", while only $0.03–$0.20 was actually spent | §2.2 |
 
-> **同日更新（§8）**：优化已合入，`scan_scope: all` 让 5 个仓库都在一次 Action 里审完全部 unit 和文档 block（每个 < $1），cobra 抽查 7/7 属实。下面 §0–§7 是优化前的基线。
+> **Same-day update (§8)**: The optimizations have been merged, and `scan_scope: all` lets all 5 repositories finish every unit and document block in a single Action run (each < $1); a spot check of cobra found 7/7 true. §0–§7 below are the baseline before optimization.
 
-> 10 月 18 日更新（§9）：外部审查逐条核对后合入 #343–#351；全仓扫描中只看到部分测试的单元 nest 262 → 79、hono 133 → 81；第二轮发现人工标注精确率 65%（只算 TP 为 15%）；两条确定性降级规则因反例撤回。
+> October 18 update (§9): after the external reviews were checked item by item, #343–#351 were merged; in full-repository scans, units that saw only part of their tests went from 262 → 79 on nest and 133 → 81 on hono; the manually labeled precision of the second-round findings is 65% (15% counting TP only); two deterministic downgrade rules were withdrawn because of counterexamples.
 
-一句话：**全仓 audit 在第三方仓库上跑得动、成本低，但目前交付给用户的内容几乎都是噪音。** 模型发现的误报主要来自测试匹配的召回不足；静态信号则被 7 个可修的确定性 bug 压低了召回和精确率（二进制测试文件、`t.assert.ok`、`toBeInstanceOf`、布尔值、行号取错、目录规则、CommonJS 导出名）。这些 bug 都已定位到代码行，修复 PR 正在进行（§6）。
+In one sentence: **the full-repository audit runs and is cheap on third-party repositories, but what is currently delivered to the user is almost all noise.** The false positives from model findings mainly come from insufficient recall of test matching; the static signals are held down in both recall and precision by 7 fixable deterministic bugs (binary test files, `t.assert.ok`, `toBeInstanceOf`, booleans, wrong line numbers, directory rules, CommonJS export names). All of these bugs have been located to code lines, and fix PRs are in progress (§6).
 
-## 1. 方法
+## 1. Method
 
-1. **真实运行**：在 `specguard-run.yml` 上手动跑 5 次，默认设置（haiku-5.5，$1，max_units 12），`scan_issue: none`（无状态，一次性）。
+1. **Real runs**: 5 manual runs on `specguard-run.yml`, with default settings (haiku-5.5, $1, max_units 12), `scan_issue: none` (stateless, one-off).
 
-| 仓库 | 语言 / 测试框架 | 提交 | 运行 |
+| Repository | Language / test framework | Commit | Run |
 |---|---|---|---|
 | nestjs/nest | TS monorepo / vitest | `c215fd9` | 39010882792 |
 | fastify/fastify | JS / node:test (`t.assert.*`) | `37df44a` | 39010887745 |
@@ -30,243 +30,243 @@
 | spf13/cobra | Go / testing | `adbc881` | 39010897273 |
 | honojs/hono | TS / vitest | `08807ce` | 39010902493 |
 
-2. **人工标注**：逐条打开 5 次运行中计入的 8 条模型发现，到对应提交的测试里找证据，并记录 `文件:行`。
-3. **离线种子评测**：在每个仓库的本地克隆上各埋 8 个缺口，共 40 个：
-   - 3 个“删除对某个导出函数的全部测试引用”
-   - 3 个“把值断言改成只断言真值”
-   - 2 个“删除边界值用例”
+2. **Manual labeling**: open, one by one, the 8 counted model findings from the 5 runs, look for evidence in the tests at the corresponding commit, and record `file:line`.
+3. **Offline seeded evaluation**: plant 8 gaps in the local clone of each repository, 40 in total:
+   - 3 "delete all test references to an exported function"
+   - 3 "change a value assertion to a truthiness-only assertion"
+   - 2 "delete a boundary-value case"
 
-   然后在 HEAD 和种子提交上分别直接调用 `inventory()` + `staticLeads()`，对比新增线索。整个过程不执行仓库代码，不推送任何内容。脚本和数据在会话 scratchpad 的 `seed-eval/`（`scripts/scan.js`、`out/<repo>-truth.json`、`out/results.json`）。
+   Then call `inventory()` + `staticLeads()` directly on HEAD and on the seeded commit, and compare the newly added leads. The whole process does not execute repository code and pushes nothing. The scripts and data are in `seed-eval/` in the session scratchpad (`scripts/scan.js`, `out/<repo>-truth.json`, `out/results.json`).
 
-## 2. 真实运行
+## 2. Real runs
 
-### 2.1 漏斗与成本
+### 2.1 Funnel and cost
 
-| 仓库 | eligible units | 本次审查（完整 + 部分测试） | 调用次数 | 成本 | 计入发现 | 静态线索 |
+| Repository | eligible units | Reviewed this run (full + partial tests) | Calls | Cost | Counted findings | Static leads |
 |---|---|---|---|---|---|---|
-| nest | 1015 | 40（30 + 10） | 5 | $0.034 | 1 | 53 |
-| fastify | 35 | 16（10 + 6） | 6 | $0.195 | 4 | 13 |
-| flask | 21 | 19（9 + 10） | 5 | $0.038 | 2 | 32 |
-| cobra | 13 | 8（2 + 6） | 5 | $0.081 | 0（incomplete） | 29 |
-| hono | 206 | 15（8 + 7） | 5 | $0.039 | 1 | 28 |
+| nest | 1015 | 40 (30 + 10) | 5 | $0.034 | 1 | 53 |
+| fastify | 35 | 16 (10 + 6) | 6 | $0.195 | 4 | 13 |
+| flask | 21 | 19 (9 + 10) | 5 | $0.038 | 2 | 32 |
+| cobra | 13 | 8 (2 + 6) | 5 | $0.081 | 0 (incomplete) | 29 |
+| hono | 206 | 15 (8 + 7) | 5 | $0.039 | 1 | 28 |
 
-漏斗行全部能对账：eligible = inventoried；selected = 完整 + 强制 + 未达。
+All funnel rows reconcile: eligible = inventoried; selected = full + forced + not reached.
 
-### 2.2 预算预检偏高约 25 倍（覆盖率的第一瓶颈）
+### 2.2 The budget pre-check is about 25 times too high (the first bottleneck of coverage)
 
-每次运行都写着“max_budget_usd $1.00 allows 4–5 calls”，同时列出 7–18 个“unit parts not reached (budget)”。实际花费只有 $0.03–$0.20。原因在 `src/engines/claude-api.js`：
+Every run says "max_budget_usd $1.00 allows 4–5 calls" while also listing 7–18 "unit parts not reached (budget)". The actual spend was only $0.03–$0.20. The cause is in `src/engines/claude-api.js`:
 
-- `worstCase()`（第 32 行）按 `PRE_FLIGHT_BPT = 1.5` 字节/token 估算输入。实测带行号的代码是 1.7–2 字节/token。一个约 150 KB 的 pack 因此被估成大于 100k token，落入 haiku-5.5 的长上下文价位（输入和输出都贵 5 倍，第 16 行）。
-- 输出按 `max_output_tokens` 32000 全额计入。实测每次调用约 1–2k 输出 token。
+- `worstCase()` (line 32) estimates the input using `PRE_FLIGHT_BPT = 1.5` bytes/token. Measured code with line numbers is 1.7–2 bytes/token. A pack of about 150 KB is therefore estimated at more than 100k tokens, which falls into haiku-5.5's long-context price tier (both input and output 5 times more expensive, line 16).
+- Output is counted in full at `max_output_tokens` 32000. Measured output is about 1–2k tokens per call.
 
-worst case 本身是正确的硬预算保证，不应该改成乐观估计。正确的修法是**运行时准入**：保持 worst-case 计划不变；每次调用完成后，如果“已花费 + 下一部分的 worst case ≤ 预算”，就从广度优先队列里追加部分；追加和跳过的部分都记入 #264 的 part ledger。按本次数据推算，同样 $1 下每次运行可达到 `MAX_UNIT_CALLS` 的 8 次上限，约多 60% 的 unit。**这是推算值，未实测。**
+The worst case itself is a correct hard-budget guarantee and should not be changed into an optimistic estimate. The correct fix is **runtime admission**: keep the worst-case plan unchanged; after each call completes, if "spent so far + the worst case of the next part ≤ budget", append parts from a breadth-first queue; parts that are appended and parts that are skipped are both recorded in the part ledger of #264. Extrapolating from this data, with the same $1 each run could reach the 8-call cap of `MAX_UNIT_CALLS`, about 60% more units. **This is an extrapolated value, not measured.**
 
-## 3. 模型发现的人工标注
+## 3. Manual labeling of model findings
 
-| # | 仓库 | 发现 | 标注 | 证据 |
+| # | Repository | Finding | Label | Evidence |
 |---|---|---|---|---|
-| 1 | flask | `json/provider.py:79` args 与 kwargs 同时传入时抛 TypeError，称“未测” | 误报：已有测试 | `tests/test_basic.py:1358` 断言 `"args or kwargs" in str(e.value)` |
-| 2 | flask | `json/provider.py:115` dataclass 序列化，称“未测” | 误报：已有测试 | `tests/test_basic.py:1346` `test_json_dump_dataclass` |
-| 3 | nest | `base-ws-exception-filter.ts:98` handleUnknownError，称“未测” | 误报：经由子类测试 | `packages/websockets/test/exceptions/ws-exceptions-handler.spec.ts:30,70,116` |
-| 4 | fastify | `lib/request.js:136` trust-proxy host 回退到空串，称“未测” | 误报：已有测试 | `test/request-header-host.test.js:75,107,143` |
-| 5 | fastify | `lib/error-handler.js:124` buildErrorHandler 原型链 | 误报：经由公开入口测试 | 27 个测试文件经 `setErrorHandler` 覆盖 |
-| 6 | fastify | `lib/error-handler.js:134` statusCode/status 映射 | 误报：已有测试 | `test/reply-error.test.js:282`（`err.status = 418`） |
-| 7 | fastify | `lib/error-serializer.js:44` 输出形状 | 误报：已有测试 | `test/build/error-serializer.test.js`（被 `build/` 忽略规则吞掉，见 §5 第 8 条） |
-| 8 | hono | `perf-measures/.../process-results.ts:14` | 属实但没有价值：性能脚本，不是产品代码 | — |
+| 1 | flask | `json/provider.py:79` raises TypeError when both args and kwargs are passed, claimed "untested" | False positive: a test exists | `tests/test_basic.py:1358` asserts `"args or kwargs" in str(e.value)` |
+| 2 | flask | `json/provider.py:115` dataclass serialization, claimed "untested" | False positive: a test exists | `tests/test_basic.py:1346` `test_json_dump_dataclass` |
+| 3 | nest | `base-ws-exception-filter.ts:98` handleUnknownError, claimed "untested" | False positive: tested through a subclass | `packages/websockets/test/exceptions/ws-exceptions-handler.spec.ts:30,70,116` |
+| 4 | fastify | `lib/request.js:136` trust-proxy host falls back to an empty string, claimed "untested" | False positive: a test exists | `test/request-header-host.test.js:75,107,143` |
+| 5 | fastify | `lib/error-handler.js:124` buildErrorHandler prototype chain | False positive: tested through the public entry point | Covered by 27 test files via `setErrorHandler` |
+| 6 | fastify | `lib/error-handler.js:134` statusCode/status mapping | False positive: a test exists | `test/reply-error.test.js:282` (`err.status = 418`) |
+| 7 | fastify | `lib/error-serializer.js:44` output shape | False positive: a test exists | `test/build/error-serializer.test.js` (swallowed by the `build/` ignore rule, see item 8 of §5) |
+| 8 | hono | `perf-measures/.../process-results.ts:14` | True but of no value: a performance script, not product code | — |
 
-有价值的为 **0/8**，与 2026-10-11 至 10-17 在 nest 和 TypeScript 上的标注结论一致。根因有两类：
+The number of valuable ones is **0/8**, consistent with the labeling conclusions on nest and TypeScript from 2026-10-11 to 10-17. There are two root causes:
 
-- 6/8 是“测试存在于没有匹配到的文件里”。模型只能依据匹配集推断，然后断言“the only matched test file 没有覆盖”。
-- 1/8 是选到了非产品代码。
+- 6/8 are "the test exists in a file that was not matched". The model can only infer from the matched set, and then asserts that "the only matched test file does not cover it".
+- 1/8 selected non-product code.
 
-结论不变：**模型路径在全仓 audit 中不应对外宣称质量。** 继续给模型加门控收益递减（详见 `docs/goal-assessment-2026-10-17.md` §3.2）。
+The conclusion is unchanged: **the model path should not claim quality externally in the full-repository audit.** Adding more gates to the model has diminishing returns (see `docs/goal-assessment-2026-10-17.md` §3.2).
 
-## 4. 离线种子评测（40 个种子）
+## 4. Offline seeded evaluation (40 seeds)
 
-### 4.1 召回
+### 4.1 Recall
 
-括号里是落在可见前 20 行内的个数，即 delivered 口径。
+The number in parentheses is the count that fell within the first 20 visible lines, i.e. the delivered definition.
 
-| 仓库 | 删除引用 | 弱化断言 | 删除边界 | 合计（delivered） |
+| Repository | Delete references | Weaken assertion | Delete boundary | Total (delivered) |
 |---|---|---|---|---|
 | fastify | 3/3 (3) | 0/3 | 0/2 | 3/8 (3) |
 | hono | 0/3 | 3/3 (1) | 0/2 | 3/8 (1) |
 | nest | 3/3 (3) | 2/3 (0) | 0/2 | 5/8 (3) |
 | flask | 3/3 (2) | 1/3 (0) | 0/2 | 4/8 (2) |
 | cobra | 3/3 (3) | 3/3 (0) | 0/2 | 6/8 (3) |
-| **合计** | **12/15 (11)** | **9/15 (1)** | **0/10** | **21/40 (11)** |
+| **Total** | **12/15 (11)** | **9/15 (1)** | **0/10** | **21/40 (11)** |
 
-种子之外的新增线索只有 1 条：cobra 的 `SetIn`，因为种子删掉了它唯一的测试，所以这条也属实。Kite 上测得的 6/8 没有在第三方仓库上复现。另一个会话在 Kite 上按 delivered 口径复测，得到 3/8（cap 把弱断言线索挤到“+N more”之后）；#263 正在把 cap 改成按类型轮转。
+Beyond the seeds there was only 1 new lead: cobra's `SetIn`, which is also true because the seed deleted its only test. The 6/8 measured on Kite did not reproduce on third-party repositories. Another session re-measured on Kite under the delivered definition and got 3/8 (the cap pushed weak-assertion leads behind "+N more"); #263 is changing the cap to rotate by kind.
 
-### 4.2 弱断言线索为什么进不了前 20
+### 4.2 Why weak-assertion leads do not make the first 20
 
-`staticLeads` 把所有 unref 线索排在所有 weak 线索之前（`src/audit-units.js:302`）。unref 线索一旦有 20 条或更多，weak 线索就一条也显示不出来：cobra 排第 29–31，flask 第 44，nest 第 131 和 136。此外 `write()` 每行只保留 3 条 weak 和 5 条 unref，并且只保留前 100 行（`src/audit-units.js:15`、`:271-272`）：nest 的 unref 从 121 条剩 31 条，weak 从 304 条剩 108 条。
+`staticLeads` ranks all unref leads before all weak leads (`src/audit-units.js:302`). Once there are 20 or more unref leads, not a single weak lead can be displayed: cobra ranks them 29–31, flask 44, nest 131 and 136. In addition, `write()` keeps only 3 weak and 5 unref per row, and only the first 100 rows (`src/audit-units.js:15`, `:271-272`): nest's unref goes from 121 down to 31, and weak from 304 down to 108.
 
-### 4.3 精确率抽样（每个仓库 unref、weak 各至多 10 条，固定随机种子）
+### 4.3 Precision sampling (at most 10 unref and 10 weak per repository, fixed random seed)
 
-| 仓库 | unref 线索 | weak 线索 |
+| Repository | unref leads | weak leads |
 |---|---|---|
-| fastify | 经由别的入口已测 5、不可单测 1（只有 6 条） | 无线索（`t.assert.ok` 识别不到） |
-| hono | 经由别的入口已测 10（在修复二进制文件 bug 之后抽样；main 上是 0 条） | 判错 8、真缺口 1、不确定 1 |
-| nest | 不可单测 3、判错 2、不确定 2、真缺口 2、经由别的入口已测 1 | 判错 8、真缺口 2 |
-| flask | 经由别的入口已测 9、真缺口 1 | 判错 9、不确定 1 |
-| cobra | **真缺口 6**、经由别的入口已测 4 | 判错 2 |
+| fastify | already tested through another entry point 5, not unit-testable 1 (only 6 leads) | no leads (`t.assert.ok` not recognized) |
+| hono | already tested through another entry point 10 (sampled after fixing the binary-file bug; on main there are 0) | judged wrong 8, real gap 1, unsure 1 |
+| nest | not unit-testable 3, judged wrong 2, unsure 2, real gap 2, already tested through another entry point 1 | judged wrong 8, real gap 2 |
+| flask | already tested through another entry point 9, real gap 1 | judged wrong 9, unsure 1 |
+| cobra | **real gap 6**, already tested through another entry point 4 | judged wrong 2 |
 
-“未被任何测试引用的导出”在 Go 这类测试直接调用公开 API 的仓库里精确率高；在 Python 和 JS 这类经由框架入口测试的仓库里，它是“测试债务清单”，而不是缺口。界面措辞已经是“lead, not a confirmed gap”，这个定位是对的。
+"Exports not referenced by any test" has high precision in repositories like Go where tests call the public API directly; in repositories like Python and JS whose tests go through framework entry points, it is a "test-debt list", not gaps. The UI wording is already "lead, not a confirmed gap", and that positioning is right.
 
-## 5. 根因（按对交付召回和精确率的影响排序）
+## 5. Root causes (ordered by impact on delivered recall and precision)
 
-| # | 根因 | 影响 | 代码位置 | 修复 |
+| # | Root cause | Impact | Code location | Fix |
 |---|---|---|---|---|
-| 1 | 测试目录里的二进制文件（`favicon.ico`）读不到，使全局 `unread > 0`，把所有 unit 的 unref 线索清空 | hono unref 0 条（修复后 77 条），删除引用类召回 0/3；flask `tests/static/config.toml` 同理被当作测试 | `src/audit-units.js:166`, `:209`, `:227` | 测试条目只取代码文件；unread 改为按 unit 判断（PR-B） |
-| 2 | node:test 的 `t.assert.ok(x)` 识别不到：lookbehind `(?<![.\w$])assert` 排除了 `t.` 前缀 | fastify weak 0 条，弱化类召回 0/3 | `src/post.js:145` OK_ARG, `src/leads.js:159` | 允许 `t.` 前缀（PR-A） |
-| 3 | 把 `toBeInstanceOf`/`toBeTypeOf` 当成弱断言，界面还写成“asserts only truthiness” | nest weak 抽样 7/10 判错，hono 2/10 | `src/leads.js:161-163` | 移除（PR-A） |
-| 4 | 布尔值被当成弱断言（`handlerExecuted`、`headers.has()`、`assert rv.is_json`） | hono 和 flask weak 抽样里大部分判错 | `src/leads.js:146-152` truthyArg；expect 路径没走 BOOL_CALL | 对布尔形名字和谓词跳过（PR-A） |
-| 5 | Go 的 `== nil` 守卫后面跟着 else 分支或钉值断言，仍被判为弱断言 | cobra weak 2/2 判错 | `src/leads.js:173` | 有 else 或后续钉值时跳过（PR-A） |
-| 6 | cap 和排序把 weak 线索挤出可见区 | delivered 召回 21→11 | `src/audit-units.js:15`, `:271-272`, `:302` | #263 轮转（另一会话）；write() 持久化由 pack-zero-and-rows 处理 |
-| 7 | 线索行号取的是第一次出现处而不是声明处；类型过滤也作用在那一行，导致 TS interface 成了“无测试引用” | nest `IHeaders`/`KafkaConfig` 判错；flask/cobra 行号错 | `src/audit-units.js:53` leadNames | 先定位声明行，再在声明行上做类型过滤（PR-B） |
-| 8 | 目录规则两头都错：`docs?/` 吞掉了 cobra 的 Go 包 `doc/`；缺少 `integration/`、`e2e/`、根目录 `scripts/`、`perf-*`；纯类型文件（`*.interface.ts`）被当成 unit；`build/` 忽略规则吞掉了 `test/build/*.test.js` | nest 前 20 行里 12 行是 interface 文件，模型调用也花在了上面；hono 唯一的发现是性能脚本；fastify 发现 #7 是误报 | `src/audit-units.js:18` NOT_UNIT, `src/trace.js:43` | 前几项由 PR-B 修；`build/` 涉及 `src/trace.js`（另一会话的 isTestPath PR 正在改），在那边跟进 |
-| 9 | CommonJS 的 `module.exports = fn` / `{ a, b }` 取不到名字，且 `pub` 非空时会丢掉顶层函数名 | fastify 34 个 unit 中 23 个、hono 52 个、nest 164 个 unit 永远产生不了 unref 线索 | `src/test-map.js:50` namesOf | 解析导出对象（PR-C） |
-| 10 | 预算预检偏高约 25 倍 | 每次少审 7–18 个 unit 部分 | `src/engines/claude-api.js:29-38` | 运行时准入（§2.2，在 #264 之后做） |
-| 11 | 边界值删除 0/10 | 单个快照中没有可用信号 | — | 不是 bug。#263 的 `boundary_unpinned`（命名常量比较且没有测试钉住）覆盖其中一部分；其余需要 git 历史 |
-| 12 | Go 测试被大量计为“没有断言”（cobra 每个 unit 35 个） | 风险排序失真 | `src/audit-units.js:57` testSignals + `src/post.js:138` ASSERTION | 未修：cobra 测试通过 `checkStringContains(t, ...)` 之类的辅助函数断言。候选做法是“把 `t` 作为第一个参数的调用算作断言”，先做离线评估 |
+| 1 | Binary files in the test directory (`favicon.ico`) cannot be read, which makes the global `unread > 0` and clears the unref leads of all units | hono unref 0 leads (77 after the fix), delete-reference recall 0/3; flask `tests/static/config.toml` likewise gets treated as a test | `src/audit-units.js:166`, `:209`, `:227` | Test entries take only code files; unread is judged per unit (PR-B) |
+| 2 | node:test's `t.assert.ok(x)` is not recognized: the lookbehind `(?<![.\w$])assert` excludes the `t.` prefix | fastify weak 0 leads, weaken-class recall 0/3 | `src/post.js:145` OK_ARG, `src/leads.js:159` | Allow the `t.` prefix (PR-A) |
+| 3 | `toBeInstanceOf`/`toBeTypeOf` are treated as weak assertions, and the UI even says "asserts only truthiness" | nest weak sample 7/10 judged wrong, hono 2/10 | `src/leads.js:161-163` | Remove (PR-A) |
+| 4 | Booleans are treated as weak assertions (`handlerExecuted`, `headers.has()`, `assert rv.is_json`) | Most of the weak samples in hono and flask are judged wrong | `src/leads.js:146-152` truthyArg; the expect path does not go through BOOL_CALL | Skip boolean-shaped names and predicates (PR-A) |
+| 5 | A Go `== nil` guard followed by an else branch or a value-pinning assertion is still judged a weak assertion | cobra weak 2/2 judged wrong | `src/leads.js:173` | Skip when there is an else or a later pinning (PR-A) |
+| 6 | The cap and ordering push weak leads out of the visible area | delivered recall 21→11 | `src/audit-units.js:15`, `:271-272`, `:302` | #263 rotation (another session); persistence in write() is handled by pack-zero-and-rows |
+| 7 | The lead's line number is taken from the first occurrence rather than the declaration; the type filter also acts on that line, so a TS interface became "no test references" | nest `IHeaders`/`KafkaConfig` judged wrong; flask/cobra line numbers wrong | `src/audit-units.js:53` leadNames | Locate the declaration line first, then apply the type filter on the declaration line (PR-B) |
+| 8 | The directory rules are wrong at both ends: `docs?/` swallows cobra's Go package `doc/`; `integration/`, `e2e/`, root-level `scripts/`, and `perf-*` are missing; type-only files (`*.interface.ts`) are treated as units; the `build/` ignore rule swallows `test/build/*.test.js` | In nest, 12 of the first 20 lines are interface files and model calls were spent on them; hono's only finding is a performance script; fastify finding #7 is a false positive | `src/audit-units.js:18` NOT_UNIT, `src/trace.js:43` | The first few items are fixed by PR-B; `build/` involves `src/trace.js` (which another session's isTestPath PR is changing), follow up there |
+| 9 | CommonJS `module.exports = fn` / `{ a, b }` cannot get names, and when `pub` is non-empty the top-level function names are lost | 23 of fastify's 34 units, 52 of hono's, and 164 of nest's can never produce unref leads | `src/test-map.js:50` namesOf | Parse the exported object (PR-C) |
+| 10 | The budget pre-check is about 25 times too high | 7–18 unit parts fewer reviewed each time | `src/engines/claude-api.js:29-38` | Runtime admission (§2.2, to be done after #264) |
+| 11 | Boundary-value deletion 0/10 | No usable signal in a single snapshot | — | Not a bug. #263's `boundary_unpinned` (comparison against a named constant with no test pinning it) covers part of this; the rest needs git history |
+| 12 | Go tests are widely counted as "no assertion" (35 per unit in cobra) | Risk ranking is distorted | `src/audit-units.js:57` testSignals + `src/post.js:138` ASSERTION | Not fixed: cobra tests assert through helpers such as `checkStringContains(t, ...)`. A candidate approach is "count a call with `t` as the first argument as an assertion", to be evaluated offline first |
 
-## 6. 优化：已做 / 进行中 / 不做
+## 6. Optimization: done / in progress / not doing
 
-| 项 | 状态 | 文件 |
+| Item | Status | Files |
 |---|---|---|
-| PR-A 弱断言分类器（根因 2–5） | 进行中（Sonnet 实现，带种子复测） | `src/leads.js`, `src/post.js` |
-| PR-B unit 与线索修复（根因 1、7、8） | 进行中；在 #263 和 pack-zero-and-rows 合入后 rebase | `src/audit-units.js` |
-| PR-C CommonJS 导出名（根因 9） | 进行中；不碰 hunkTokens | `src/test-map.js` |
-| 线索 cap 轮转（根因 6） | #263（另一会话） | `src/audit-units.js`, `src/audit-post.js` |
-| 运行时预算准入（根因 10） | 等 #264 和 pack-zero-and-rows 合入后开始；合入前在自建的 Kite `eval/*` 分支上跑真实种子扫描 | `src/engines/claude-api.js` |
-| 模型 missing_test 门控（错误消息字面量与测试共享时降为低置信） | **不做**：8 条里只能挡住 1 条（#1），标注噪音下无法证明净收益 | — |
-| Go 辅助函数断言（根因 12） | 待离线评估 | — |
+| PR-A weak-assertion classifier (root causes 2–5) | In progress (implemented by Sonnet, with seeded re-measurement) | `src/leads.js`, `src/post.js` |
+| PR-B unit and lead fixes (root causes 1, 7, 8) | In progress; rebase after #263 and pack-zero-and-rows are merged | `src/audit-units.js` |
+| PR-C CommonJS export names (root cause 9) | In progress; does not touch hunkTokens | `src/test-map.js` |
+| Lead cap rotation (root cause 6) | #263 (another session) | `src/audit-units.js`, `src/audit-post.js` |
+| Runtime budget admission (root cause 10) | Starts after #264 and pack-zero-and-rows are merged; before merging, run a real seeded scan on the self-built Kite `eval/*` branch | `src/engines/claude-api.js` |
+| Model missing_test gate (downgrade to low confidence when an error-message literal is shared with a test) | **Not doing**: it would block only 1 of 8 (#1), and net benefit cannot be proven under labeling noise | — |
+| Go helper-function assertions (root cause 12) | Awaiting offline evaluation | — |
 
-每个 PR 合并前都要跑同一套 40 种子评测，并按 delivered 口径报告前后对比。凡是涉及扫描选择或预算的改动，还要在 Kite 种子分支上跑真实运行（见 memory：real-run-before-merge）。
+Before every PR is merged, the same 40-seed evaluation must be run, with before/after comparison reported under the delivered definition. For any change involving scan selection or budget, a real run on the Kite seeded branch is also required (see memory: real-run-before-merge).
 
-## 7. 仍未知
+## 7. Still unknown
 
-1. **合并 PR-A/B/C 和 #263 之后 delivered 召回实际是多少**：需要重跑本评测和这 5 次真实运行。
-2. **模型路径在修好匹配之后能否有价值**：6/8 的误报来自测试匹配召回不足。根本解决需要更好的代码→测试检索（不只按名字和一级 import），本日未做。
-3. **Python 和 Go 的 unref 精确率是否稳定**：每个仓库只抽 10 条，单人标注，未做第二人复核。
-4. **更大的仓库**：nest 的 1015 个 unit 每次只审 40 个；即使做了运行时准入，一轮全量也要约 20 次运行（推算）。在这个规模上，确定性清单比模型审查更实际。
+1. **What delivered recall actually is after PR-A/B/C and #263 are merged**: this evaluation and the 5 real runs need to be rerun.
+2. **Whether the model path can have value once matching is fixed**: 6/8 of the false positives come from insufficient recall of test matching. A fundamental fix needs better code→test retrieval (not only by name and first-level import), which was not done today.
+3. **Whether the unref precision for Python and Go is stable**: only 10 sampled per repository, labeled by a single person, with no second-person recheck.
+4. **Larger repositories**: nest's 1015 units get only 40 reviewed each time; even with runtime admission, one full round would take about 20 runs (extrapolated). At this scale a deterministic list is more practical than model review.
 
-## 8. 同日后续：优化合入与“一次 Action 审完全仓”
+## 8. Same-day follow-up: optimizations merged and "finish the whole repository in one Action"
 
-### 8.1 合入的改动
+### 8.1 Merged changes
 
-| PR | 内容 | 对应根因 / 来源 |
+| PR | Content | Corresponding root cause / source |
 |---|---|---|
-| #270 | 弱断言分类器：`t.assert.ok`、布尔名与谓词、`toBeInstanceOf`/`toBeTypeOf` 移出、Go nil 守卫 | 根因 2–5 |
-| #271 | unit 与线索：二进制测试文件、声明行、目录规则、纯类型文件 | 根因 1、7、8（nest eligible 1015 → 489） |
-| #269 | CommonJS 导出名 | **关闭**：fastify unref 6 → 42，抽样 5/5 是经由别的入口已测，净负 |
-| #275 | 运行时预算准入（未知 usage 按 worst case 计） | 根因 10 |
-| #289 | verifyUnits 只认实际执行过的 part；boundary 线索支持负数和小数 | unknown-unknown 审查 U1–U3 |
-| #329 | `scan_scope: all`：一次运行规划全部 unit part 和文档 block；硬预算 + 截止时间（余量 300 秒或最长调用的 2 倍）；未覆盖到的部分逐条记账；只有“确实没审到”才变红 | 用户要求“一次 action 把全仓都 review 完” |
-| #333、#336 | eval：零 diff / 部分 overlay 的构造门禁；combined 计分隔离与去重；需求排除锚定到仓库根；eval PR 的测试候选不含 SpecGuard 自测 | version-eval 与 Actions 复审 |
-| #335 | finding 绑定产生它的调用；单次调用 cut 源码之外的行降为低置信；单次调用未知 usage 按 worst case 计 | version-eval R1–R3 |
-| #340 | “未评估”不再记为非需求；跨 unit 去重；all 下列出全部静态线索；手动运行 artifact 带 `scan-parts.json` | Actions 复审 |
-| #341 | 同名测试只留本目录/有 import 的；装不下的弱匹配测试不再记为 cut；import 行命中不再标记截断 | 全仓运行暴露的 forced 瓶颈 |
+| #270 | Weak-assertion classifier: `t.assert.ok`, boolean names and predicates, `toBeInstanceOf`/`toBeTypeOf` removed, Go nil guard | Root causes 2–5 |
+| #271 | Units and leads: binary test files, declaration line, directory rules, type-only files | Root causes 1, 7, 8 (nest eligible 1015 → 489) |
+| #269 | CommonJS export names | **Closed**: fastify unref 6 → 42, with 5/5 of the sample being already tested through another entry point, net negative |
+| #275 | Runtime budget admission (unknown usage counted at worst case) | Root cause 10 |
+| #289 | verifyUnits recognizes only parts actually executed; boundary leads support negative numbers and decimals | unknown-unknown review U1–U3 |
+| #329 | `scan_scope: all`: one run plans all unit parts and document blocks; hard budget + deadline (margin 300 seconds or 2 times the longest call); parts not reached are accounted for one by one; it turns red only when something was "truly not reviewed" | User requirement "review the whole repository in one action" |
+| #333, #336 | eval: construction gates for zero diff / partial overlay; combined scoring isolation and deduplication; requirement exclusions anchored to the repository root; test candidates of the eval PR exclude SpecGuard's own tests | version-eval and Actions re-review |
+| #335 | A finding is bound to the call that produced it; lines outside the source cut in a single call are downgraded to low confidence; unknown usage in a single call counted at worst case | version-eval R1–R3 |
+| #340 | "Not assessed" is no longer recorded as non-requirement; cross-unit deduplication; under all, all static leads are listed; the manual-run artifact carries `scan-parts.json` | Actions re-review |
+| #341 | Same-named tests keep only those in this directory/with an import; weakly matched tests that do not fit are no longer recorded as cut; import-line hits no longer mark truncation | The forced bottleneck exposed by full-repository runs |
 
-### 8.2 第三方全仓运行（`specguard-run.yml`，main，haiku-5.5，`scan_scope: all`，`scan_issue: none`，每个仓库一次运行）
+### 8.2 Third-party full-repository runs (`specguard-run.yml`, main, haiku-5.5, `scan_scope: all`, `scan_issue: none`, one run per repository)
 
-第 1 轮在 #329 合入后（main `5945f81`），第 2 轮在 #341 合入后（main `b30696a`）。两轮都是 5/5 绿色，**没有任何 unit part 或文档 block 因预算或时间未审到**，没有失败调用。
+Round 1 was after #329 was merged (main `5945f81`), and round 2 was after #341 was merged (main `b30696a`). Both rounds were 5/5 green, **with no unit part or document block left unreviewed because of budget or time**, and no failed calls.
 
-| 仓库 | units | forced（部分测试，记为 unsure）第 1 → 2 轮 | 调用 | 成本 第 1 → 2 轮 | 模型时间 | 报告缺口 第 1 → 2 轮 |
+| Repository | units | forced (partial tests, recorded as unsure) round 1 → 2 | Calls | Cost round 1 → 2 | Model time | Reported gaps round 1 → 2 |
 |---|---|---|---|---|---|---|
-| nest | 489 | 277 → 262 | 108 → 108 | $0.77 → $0.77 | 12 min | 18 + 2 下沉 → 16 + 1 |
-| fastify | 33 | 20 → 19 | ? → 24 | $0.41 → $0.36 | 3 min | 14 + 1 文档 → 10 + 1 下沉 |
+| nest | 489 | 277 → 262 | 108 → 108 | $0.77 → $0.77 | 12 min | 18 + 2 push-down → 16 + 1 |
+| fastify | 33 | 20 → 19 | ? → 24 | $0.41 → $0.36 | 3 min | 14 + 1 doc → 10 + 1 push-down |
 | flask | 21 | 13 → 11 | ? → 9 | $0.06 → $0.06 | 1 min | 7 + 1 → 4 + 2 |
 | cobra | 18 | 7 → 7 | ? → 14 | $0.19 → $0.19 | 2 min | 9 + 1 → 6 |
 | hono | 172 | 171 → 133 | 103 → 81 | $1.12 → $0.77 | 7–10 min | 8 → 17 |
 
-第 1 轮的 artifact 还没有 `scan-parts.json`（#340 才加），调用数只能从 nest/hono 的 Summary 读出，其余记“?”。第 2 轮运行：39032664154、39032666155、39032667965、39032669964、39032672271。
+The round 1 artifacts do not yet have `scan-parts.json` (added only in #340), so the call counts could only be read from the nest/hono Summary, and the rest are recorded as "?". Round 2 runs: 39032664154, 39032666155, 39032667965, 39032669964, 39032672271.
 
-对比 §2.1：同一批仓库原来每次只审 8–40 个 unit（nest 1015 个里 40 个），现在一次运行全部审到，成本仍在 $1 以内。
+Compared with §2.1: the same repositories used to have only 8–40 units reviewed each time (40 of nest's 1015), and now all are reviewed in one run, with cost still within $1.
 
-**抽查（cobra 第 1 轮）**：7 条“没有测试”的结论在扫描提交 `adbc881` 上全部属实（`SOURCE_DATE_EPOCH`、`GenReSTCustom`、`GenMarkdownCustom`、`forceMultiLine`、`hasAllFlags`、`HasAvailableSubCommands`、`OutOrStderr` 均无任何 `_test.go` 引用），多数是合理的待补测试。对比 §3 的 0/8，这是明显改善，但只有一个仓库、单人核对，其余 4 个仓库未标注。
+**Spot check (cobra round 1)**: all 7 "no test" conclusions were true on the scanned commit `adbc881` (`SOURCE_DATE_EPOCH`, `GenReSTCustom`, `GenMarkdownCustom`, `forceMultiLine`, `hasAllFlags`, `HasAvailableSubCommands`, `OutOrStderr` have no reference in any `_test.go`), and most are reasonable tests to add. Compared with 0/8 in §3, this is a clear improvement, but it is only one repository, checked by one person, and the other 4 repositories are not labeled.
 
-### 8.3 Kite 种子仓库（43 units、8 个种子）
+### 8.3 Kite seeded repository (43 units, 8 seeds)
 
-| 版本 | 覆盖 | 调用 / 成本 | 模型命中 | 静态线索可见 |
+| Version | Coverage | Calls / cost | Model hits | Static leads visible |
 |---|---|---|---|---|
-| #289（selected，$1） | 72 个 part 未审到 | 7 / $0.46 | 3/8 | 6/8 |
-| #329（all，$5） | 130/130 part、131/131 block | 26 / $0.93 | 3/8（种子 4–6） | 6/8 |
-| #341 + #340（all） | 全部 | 24 / $0.68 | 2/8（种子 6 丢失：filename.ts 的匹配测试两次完全相同，属模型波动） | **7/8**（moveCrop 经 #340 的完整线索列表送达） |
+| #289 (selected, $1) | 72 parts not reviewed | 7 / $0.46 | 3/8 | 6/8 |
+| #329 (all, $5) | 130/130 parts, 131/131 blocks | 26 / $0.93 | 3/8 (seeds 4–6) | 6/8 |
+| #341 + #340 (all) | All | 24 / $0.68 | 2/8 (seed 6 lost: the matched tests of filename.ts were exactly the same both times, so it is model variance) | **7/8** (moveCrop was delivered through the full lead list of #340) |
 
-全覆盖没有提高模型召回：删除测试类种子 1–3 的 unit 都审到了，模型仍未报出。这是模型能力的上限，不是覆盖问题。
+Full coverage did not raise model recall: the units of the delete-test seeds 1–3 were all reviewed, and the model still did not report them. This is the ceiling of model capability, not a coverage problem.
 
-### 8.4 文档审查与决策
+### 8.4 Document reviews and decisions
 
-- **PR 模式分块（single-review-chunking 计划）**：P1/P3 不做。P2（对 focus 丢掉的文件追加调用）**也不做**：修正计分后，combined 大 PR 的检出约 10/24（isolated 14/24），损失主要在送达层——fast-tier 的 `REDUCED_INLINE = 3` 只发 3 条 inline，其余进 Summary。追加调用改变不了这一点。
-- **version-eval 报告**：R1–R3 属实并已修（#335）；“全仓一次完成未满足”已由 #329 过时；把 R1/R2 定为高优先级偏重——引用的原文必须逐字出现在引用行，看不到那一行的调用很难通过校验。
-- **Actions 结果复审**：需求文档被 eval 配置排除、“未评估→非需求”、跨 unit 重复、静态线索被 cap 隐藏都属实并已修（#336、#340）。不同意“fastify 变红符合预期”：部分测试是结论不确定，不是没审到，红灯只留给没审到的部分。
-- **手动运行表单 UX 审查**：目录链接应限定扫描范围（改用已有的 `scan_paths`）、`max_units` 文案、默认写追踪 issue 属实；“默认 all 与 Copilot 不兼容”只对一半——会明确报错并提示改用 selected，不会静默降级。修复 PR 进行中。
+- **PR-mode chunking (the single-review-chunking plan)**: P1/P3 are not done. P2 (adding a call for the files dropped by focus) is **also not done**: after correcting the scoring, the detection for a combined large PR is about 10/24 (isolated 14/24), and the loss is mainly in the delivery layer — the fast-tier `REDUCED_INLINE = 3` sends only 3 inline comments and the rest go into the Summary. An additional call cannot change this.
+- **version-eval report**: R1–R3 are true and have been fixed (#335); "whole repository in one run is not met" is outdated thanks to #329; making R1/R2 high priority is overweighted — the quoted original text must appear verbatim on the cited line, and a call that cannot see that line will hardly pass validation.
+- **Actions results re-review**: requirement documents excluded by the eval configuration, "not assessed → non-requirement", cross-unit duplicates, and static leads hidden by the cap are all true and have been fixed (#336, #340). We disagree that "fastify turning red is as expected": partial tests mean an uncertain conclusion, not unreviewed, and a red light is reserved for the part that was not reviewed.
+- **Manual-run form UX review**: directory links should limit the scan scope (use the existing `scan_paths` instead), the wording of `max_units`, and writing a tracking issue by default are true; "default all is incompatible with Copilot" is only half right — it explicitly errors and prompts to switch to selected, and does not silently degrade. The fix PR is in progress.
 
-### 8.5 仍未知（更新 §7）
+### 8.5 Still unknown (updating §7)
 
-1. §7.1、§7.4 已回答：全仓一次运行可行，nest 规模也只要约 $0.8、12 分钟。
-2. **forced 仍是主要证据缺口**：nest 54%、hono 77% 的 unit 只看到部分测试。剩下的主要是测试切片窗口（80 行）和测试按整文件计成本，在 `slices()` 和 collector 的 `tcost`。
-3. 模型对“删除了测试”的检出仍弱（Kite 种子 1–3 一直 0/3）。
-4. 其余 4 个第三方仓库的第 2 轮发现未人工标注；精确率结论只基于 cobra 抽查。
+1. §7.1 and §7.4 are answered: a full-repository single run is feasible, and even at nest scale it takes only about $0.8 and 12 minutes.
+2. **forced is still the main evidence gap**: 54% of nest's and 77% of hono's units see only part of their tests. What remains is mainly the test slice window (80 lines) and tests being costed by whole file, in `slices()` and the collector's `tcost`.
+3. The model's detection of "tests were deleted" is still weak (Kite seeds 1–3 have always been 0/3).
+4. The round 2 findings of the other 4 third-party repositories are not manually labeled; the precision conclusion is based only on the cobra spot check.
 
-## 9. 10 月 18 日：外部审查、证据完整度与精确率
+## 9. October 18: external reviews, evidence completeness, and precision
 
-本节的数字都来自真实运行（Kite 工作流固定到 PR 分支，haiku-5.5，`scan_scope: all`）或离线可复跑的收集器测量。四份外部审查（`docs/branch-archives/repo-review-2026-10-18/`、`docs/branch-archives/pr-actions-goal-review-2026-10-18/`、`docs/comprehensive-assessment-2026-10-18.md`、PR #347/#348）的结论逐条核对过代码后再处理。
+The numbers in this section all come from real runs (the Kite workflow pinned to the PR branch, haiku-5.5, `scan_scope: all`) or from collector measurements that can be re-run offline. The conclusions of four external reviews (`docs/branch-archives/repo-review-2026-10-18/`, `docs/branch-archives/pr-actions-goal-review-2026-10-18/`, `docs/comprehensive-assessment-2026-10-18.md`, PR #347/#348) were checked against the code item by item before being handled.
 
-### 9.1 合入的改动
+### 9.1 Merged changes
 
-| PR | 改动 | 依据 |
+| PR | Change | Basis |
 |---|---|---|
-| #344 | unit finding 的来源必须是自己的文件 / 列出的测试 / 产生它的调用；目录链接按仓库根锚定，分支与路径分不清时报错而不是扩大范围；CommonJS 导出名进入测试匹配；JSON 修复调用单独预留最坏费用；Windows 优先用 Git Bash | 审查 repo-review 的第 2–6 项，各有合成反例 |
-| #343 | `pack-cut.txt` 按调用记录（`path<TAB>unit ids`），不再把一个调用里被截断的共享测试算到所有单元头上；超过上限的测试按其切片计价；单元按测试字节从小到大装入 | 见 9.2 |
-| #346 | PR 正文被编辑（`edited`）时重新审查：需求指纹（标题 + 正文）不变则 preflight 跳过、不调模型；ci.yml 的 test job 在 edited 时跳过；手动表单预算默认 $5（上限，不是花费） | 真实运行 39088516123：test=skipped，dogfood 重新审查 |
-| #349 | 只含一个文档块的调用超过 3500 个输出 token 时，用更大的上限（最多 4 倍、不超过 max_output_tokens）重试一次，预算规则与拆半相同；README 统一成一张“任务颜色”表，删掉“永远绿色”的错误说法 | 39083942363 有 2 个单块调用因此失败；修复后 39090694256 完整（failed 为空） |
-| #345 | `NO_GAP` 识别 “not a gap”，但后面带 in / but / however 的句子保留；扫描提示要求先读完整个测试，另一个字段或另一次调用的断言不算钉住了这个值 | 见 9.4：两条确定性降级规则被撤回 |
-| #350 | 只从 CommonJS 导出对象得知的名字仍用于测试匹配，但不再生成“没有测试引用它”的线索 | fastify 9 → 35 → 9；与已关闭的 #269 同一模式（见 9.3） |
-| #351 | 同一 head 上，需求在审查期间被修改时，旧运行不发布（不写评论、不更新摘要），由较新的运行发布；siblingCall 门只在兄弟测试用相同参数调用时生效；PR 改 base 时仍跑 test | 真实竞态：39094987660 记录 “requirements changed during the review” 且未写入，edited 运行 39095039083 发布；Kite 39095007207 中原先被降级的 fps 弱断言现已发布 |
+| #344 | The source of a unit finding must be its own file / a listed test / the call that produced it; directory links are anchored to the repository root, and when branch and path cannot be told apart it errors instead of widening the scope; CommonJS export names enter test matching; JSON-repair calls separately reserve the worst-case cost; on Windows, prefer Git Bash | Review repo-review items 2–6, each with a synthetic counterexample |
+| #343 | `pack-cut.txt` is recorded per call (`path<TAB>unit ids`), and no longer attributes a shared test truncated in one call to all units; tests over the limit are priced by their slices; units are packed in order of test bytes from small to large | See 9.2 |
+| #346 | Re-review when the PR body is edited (`edited`): if the requirement fingerprint (title + body) is unchanged, preflight skips without calling the model; the ci.yml test job is skipped on edited; the manual form budget defaults to $5 (a cap, not the spend) | Real run 39088516123: test=skipped, dogfood re-reviewed |
+| #349 | A call containing only one document block that exceeds 3500 output tokens is retried once with a larger limit (up to 4 times, not exceeding max_output_tokens), with the same budget rule as bisection; the README is unified into a single "task colors" table, removing the wrong claim of "always green" | 39083942363 had 2 single-block calls fail because of this; after the fix 39090694256 was complete (failed is empty) |
+| #345 | `NO_GAP` recognizes "not a gap", but sentences followed by in / but / however are kept; the scan prompt requires reading the whole test first, and an assertion in another field or another call does not count as pinning this value | See 9.4: two deterministic downgrade rules were withdrawn |
+| #350 | Names known only from a CommonJS export object are still used for test matching, but no longer generate "no test references it" leads | fastify 9 → 35 → 9; the same pattern as the closed #269 (see 9.3) |
+| #351 | On the same head, if the requirement is modified during the review, the old run does not publish (no comment, no summary update) and the newer run publishes; the siblingCall gate takes effect only when the sibling test is called with the same arguments; the test still runs when a PR changes base | Real race: 39094987660 recorded "requirements changed during the review" and wrote nothing, and the edited run 39095039083 published; in Kite 39095007207 the fps weak assertion that was previously downgraded is now published |
 
-合入后 main（`9cd2bb4`）的 Kite 种子运行 39093382612（`fail_on_error: true`）：绿色，failed 0，43/43 whole，24 次调用，$0.70，3 个弱断言种子都已发布；仅有 3 个文档块模型没有作答（警告，不变红）。可复用工作流的 `# specguard-pin` 更新到 `2255abd`。
+After the merge, the Kite seeded run 39093382612 on main (`9cd2bb4`) (`fail_on_error: true`): green, failed 0, 43/43 whole, 24 calls, $0.70, all 3 weak-assertion seeds published; only 3 document blocks were not answered by the model (a warning, does not turn red). The `# specguard-pin` of the reusable workflow was updated to `2255abd`.
 
-### 9.2 证据完整度：只看到部分测试的单元（发布器口径）
+### 9.2 Evidence completeness: units that saw only part of their tests (publisher definition)
 
-| 运行 | 仓库 | 单元 | 之前 → 之后 | 调用 | 费用 | 发布的缺口 |
+| Run | Repository | Units | Before → after | Calls | Cost | Published gaps |
 |---|---|---|---|---|---|---|
-| 39083946253 | nest | 489 | 262 → 79 | 104 | $1.46 | 27 + 1 下移 |
+| 39083946253 | nest | 489 | 262 → 79 | 104 | $1.46 | 27 + 1 moved down |
 | 39083944276 | hono | 172 | 133 → 81 | 78 | $1.14 | 13 + 1 |
-| 39083942363 | Kite 种子 | 43 | 13 → 0 | 44 | — | 6 missing + 3 weak（3 个弱断言种子全部发布） |
+| 39083942363 | Kite seeded | 43 | 13 → 0 | 44 | — | 6 missing + 3 weak (all 3 weak-assertion seeds published) |
 
-“之前”是第二轮 main 运行（nest 39032664154、hono 39031978219、Kite 39031973425）。下降有三个来源：截断归属修正（离线单独测：nest 263 → 125、hono 133 → 86）、切片计价和装入顺序（再降到 78 / 82）。离线检查：之前不完整、之后完整的单元，其列出的测试没有一个出现在真实 pack 的 notWhole 里。这是证据完整度的改善，不是召回或精确率的测量。费用上升（nest $0.77 → $1.46）来自 pack 里完整的测试；因此手动表单默认预算改为 $5。
+"Before" is the second-round main runs (nest 39032664154, hono 39031978219, Kite 39031973425). The decline has three sources: the truncation-attribution fix (measured separately offline: nest 263 → 125, hono 133 → 86), slice pricing and packing order (down further to 78 / 82). Offline check: for units that were incomplete before and complete after, none of their listed tests appears in notWhole of the real pack. This is an improvement in evidence completeness, not a measurement of recall or precision. The cost increase (nest $0.77 → $1.46) comes from the complete tests in the pack; therefore the default budget of the manual form was changed to $5.
 
-### 9.3 第二轮发现的人工标注（fastify / flask / cobra / hono）
+### 9.3 Manual labeling of second-round findings (fastify / flask / cobra / hono)
 
-标注标准：TP = 说法属实且值得处理；TP-low = 属实但价值很低；FP = 说法不成立（附反证的文件和行号）。逐条表格在本次会话的标注文件中，下表是汇总。
+Labeling criteria: TP = the claim is true and worth handling; TP-low = true but of very low value; FP = the claim does not hold (with the counter-evidence file and line number attached). The item-by-item table is in the labeling file of this session, and the table below is the summary.
 
-| 仓库 | 发布 | TP | TP-low | FP | 精确率（TP + TP-low） |
+| Repository | Published | TP | TP-low | FP | Precision (TP + TP-low) |
 |---|---|---|---|---|---|
 | fastify | 11 | 0 | 6 | 5 | 55% |
 | flask | 6 | 1 | 3 | 2 | 67% |
 | cobra | 6 | 5 | 1 | 0 | 100% |
 | hono | 17 | 0 | 10 | 7 | 59% |
-| 合计 | 40 | 6 | 20 | 14 | 65%（只算 TP：15%） |
+| Total | 40 | 6 | 20 | 14 | 65% (TP only: 15%) |
 
-- cobra 的 TP 里有一个真实 bug：`doc/yaml_docs.go` 的 `GenYamlCustom` 接收 `linkHandler` 却从不调用。
-- fastify 的 5 个 FP 都是“只看匹配到的单元测试，就断定没有测试”；这些行为由别处的集成测试覆盖（例如 `test/internals/initial-config.test.js:29` 断言了默认值）。名字检索抓不到这类覆盖，是静态审查的已知上限。
-- hono / flask 的弱断言 FP：模型只看被引用的那一行，没读同一测试里后面的断言。
-- CommonJS 线索：#344 之后 fastify 的 unreferenced_export 线索从 9 增至 35，新增的 26 个都是通过公开 API 测试的 `lib/*` 内部函数，因此由 #350 撤回；Kite 上 5 条同类线索属实，但不能推广。
+- Among cobra's TPs there is a real bug: `GenYamlCustom` in `doc/yaml_docs.go` receives `linkHandler` but never calls it.
+- fastify's 5 FPs are all "seeing only the matched unit tests and concluding that no test exists"; these behaviors are covered by integration tests elsewhere (for example, `test/internals/initial-config.test.js:29` asserts the default value). Name retrieval cannot catch this kind of coverage, which is a known ceiling of static review.
+- Weak-assertion FPs in hono / flask: the model looked only at the cited line and did not read the later assertions in the same test.
+- CommonJS leads: after #344 fastify's unreferenced_export leads rose from 9 to 35, and the 26 newly added are all `lib/*` internal functions tested through the public API, so they were withdrawn by #350; the 5 leads of the same kind on Kite are true, but cannot be generalized.
 
-### 9.4 审查结论的处理
+### 9.4 Handling of review conclusions
 
-- **采纳**：#345 的两条确定性降级规则（同一测试里另有精确断言就降级；锚定正则就降级）被两个反例推翻——`assert.ok(result.total)` 旁边的 `assert.equal(result.currency, 'USD')` 并不约束 total；`/^.*$/` 锚定但接受任何内容。两条规则只消除 2–3 个 FP，却会压低真实缺口，因此撤回，改为提示词要求和两个回归控制。
-- **采纳**：PR 正文改了而 head 不变时不会重新审查（#346）；默认 $1 预算不够大仓库全量扫描（#346）；单块文档调用溢出无法拆分（#349）；README 失败策略自相矛盾（#349）；“not a gap … but …” 会整条丢掉（#345）。
-- **采纳（增量审查 `docs/incremental-review-2026-10-18.md`）**：#346 让 edited 运行与 push 运行并发，旧正文的结果可能覆盖新结果；siblingCall 把“解析器在字面量上有测试”当成“派生值已被钉住”；改 base 也跳过 test。三项都由 #351 修复。linked issue 被编辑时仍不会自动重审（需要 issue → PR 的映射），列为后续。
-- **修正了我自己的验证方式**：Kite 评测工作流原先没有 `fail_on_error: true`，不完整的运行也显示绿色；之后的评测运行都打开了它。
-- **暂缓（需要数据或产品决定）**：基线门（仓库里超过 200 个 baseline / `__snapshots__` 文件时，所有 missing_test 都降为低置信度）对大型 React 仓库可能过宽，但没有样本可测；一份权威产品合同用于 dogfood（内容需要产品方确认）；版本化的需求—代码—测试追溯边；冻结的独立评测集、真人盲评和合并前修复跟踪。
-- **不改**：私有 Kite 仓库的评审内容已经进入公开仓库的两个证据 JSON（`docs/latest-pr-actions-followup-evidence-2026-10-17.json`、`docs/shift-left-live-review-evidence-2026-10-17.json`），从当前树删除不会把它们从历史里去掉；是否改写历史并强推，由仓库所有者决定。
+- **Adopted**: the two deterministic downgrade rules of #345 (downgrade if another exact assertion exists in the same test; downgrade if the regex is anchored) were overturned by two counterexamples — `assert.equal(result.currency, 'USD')` next to `assert.ok(result.total)` does not constrain total; `/^.*$/` is anchored but accepts anything. The two rules would remove only 2–3 FPs but would suppress real gaps, so they were withdrawn and replaced by a prompt requirement and two regression controls.
+- **Adopted**: when the PR body changes but the head does not, no re-review happens (#346); the default $1 budget is not enough for a full scan of a large repository (#346); a single-block document call that overflows cannot be split (#349); the README failure policy is self-contradictory (#349); "not a gap … but …" would drop the whole entry (#345).
+- **Adopted (incremental review `docs/incremental-review-2026-10-18.md`)**: #346 lets the edited run and the push run be concurrent, so the result for the old body may overwrite the new result; siblingCall treats "the parser has tests on literals" as "the derived value is already pinned"; changing base also skips test. All three were fixed by #351. When a linked issue is edited, re-review still does not happen automatically (an issue → PR mapping is needed), listed as follow-up.
+- **Corrected my own verification method**: the Kite evaluation workflow originally lacked `fail_on_error: true`, so incomplete runs also showed green; all later evaluation runs turned it on.
+- **Deferred (needs data or a product decision)**: the baseline gate (when a repository has more than 200 baseline / `__snapshots__` files, all missing_test are downgraded to low confidence) may be too broad for large React repositories, but there is no sample to measure it; an authoritative product contract for dogfood (the content needs confirmation from the product owner); versioned requirement–code–test traceability edges; a frozen independent evaluation set, human blind review, and pre-merge fix tracking.
+- **Not changing**: the review content of the private Kite repository has already entered two evidence JSONs in the public repository (`docs/latest-pr-actions-followup-evidence-2026-10-17.json`, `docs/shift-left-live-review-evidence-2026-10-17.json`); deleting them from the current tree does not remove them from history. Whether to rewrite history and force-push is up to the repository owner.
 
-### 9.5 仍未知
+### 9.5 Still unknown
 
-- 召回：Kite 种子只是开发集，本轮的种子运行之间发布的 missing_test 条目不同（2–6 条），没有按种子 ID 重新标注，删除测试种子的召回是否改善未知；需要固定输入重复运行、按种子 ID 计分，并配一份未参与调优的保留集。
-- 81 个 hono 单元仍只看到部分测试：剩下的主要原因是测试块超过 80 行的切片窗口（nest 剩余 78 个中有 55 个）。
-- 默认的 Copilot 路径本轮没有真实运行（额度用尽），所有结论都来自 Claude API 引擎。
+- Recall: the Kite seeds are only a development set; the published missing_test entries differed between the seeded runs this round (2–6), they were not relabeled by seed ID, and whether recall of the delete-test seeds improved is unknown; this needs repeated runs with fixed inputs, scoring by seed ID, and a holdout set that did not participate in tuning.
+- 81 hono units still see only part of their tests: the main remaining reason is test blocks exceeding the 80-line slice window (55 of the 78 remaining in nest).
+- The default Copilot path was not run for real this round (quota exhausted), and all conclusions come from the Claude API engine.

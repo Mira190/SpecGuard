@@ -1,297 +1,297 @@
-# 交接：目标与「需求 ↔ 代码双向追溯」定位的第一性原理批判
+# Handoff: a first-principles critique of the goal and the "requirement ↔ code two-way traceability" positioning
 
-日期：2026-10-09。分支：`experiment/trace-local-eval`（HEAD `eaa60ce`）。
-性质：只做分析，不改运行时代码。读者是接手的下一个 session。
+Date: 2026-10-09. Branch: `experiment/trace-local-eval` (HEAD `eaa60ce`).
+Nature: analysis only, no runtime code changes. The reader is the next session that takes over.
 
-## 0. 交接须知
+## 0. Handoff notes
 
-**先读这一节，再读别的。**
+**Read this section first, then the rest.**
 
-1. **用户原话里的粘贴内容没有送达。** 用户消息里写的是 `[Pasted text #7 +3 lines]`，正文没有传过来。从仓库推断，它很可能就是双向追溯需求里那段被截断的约束列表（`docs/traceability-plan.md:12`：「requirements may live in `docs/`, `specs/`, Gherkin, or Git…」）。**接手后第一件事：请用户重新粘贴。** 如果第 3 条及以后的约束和本文推断的不同，§4、§6 要重排。
-2. 用户的立场：**质量工程（QE）**。目标是一个做 code review 的 GitHub Action，目的是 **shift-left**。
-3. 本文不重复 `docs/goal-first-principles.md`（R–C–T 三角、12 行状态矩阵、U1–U20）。本文审查的是**那份分析本身的前提**，再把仓库自己测到的数据拿来对照。新发现的盲点编号为 **N1–N18**，不与 U 编号冲突。
-4. 工作约定（来自用户记忆）：
-   - 实现代码交给 Sonnet 子 agent 写，主 session 负责写规格和评审。
-   - PR、commit、issue 里一律不加 AI 署名。
-   - 并行 agent 的 brief 里禁止 `git stash/checkout/reset/restore/clean`；按文件划分归属，或改用 worktree。
-5. 必读文件，按优先级：
+1. **The pasted content in the user's original message did not arrive.** The user's message says `[Pasted text #7 +3 lines]`, and the body was not transmitted. Inferring from the repository, it is most likely the truncated list of constraints in the two-way traceability requirement (`docs/traceability-plan.md:12`: "requirements may live in `docs/`, `specs/`, Gherkin, or Git…"). **The first thing to do after taking over: ask the user to paste it again.** If constraint 3 onward differ from what this document infers, §4 and §6 must be reordered.
+2. The user's position: **quality engineering (QE)**. The goal is a GitHub Action that does code review, for the purpose of **shift-left**.
+3. This document does not repeat `docs/goal-first-principles.md` (the R–C–T triangle, the 12-row state matrix, U1–U20). It reviews the **premises of that analysis itself**, and then compares them against data measured in the repository. Newly found blind spots are numbered **N1–N18**, without clashing with the U numbers.
+4. Working conventions (from the user's memory):
+   - Implementation code is written by a Sonnet sub-agent; the main session writes the specs and does the review.
+   - No AI attribution in PRs, commits, or issues.
+   - Briefs for parallel agents forbid `git stash/checkout/reset/restore/clean`; ownership is partitioned by file, or worktrees are used instead.
+5. Must-read files, in priority order:
 
-| 文件 | 为什么读 |
+| File | Why read it |
 |---|---|
-| `docs/design.md` §0（原始目标原文）、Status、§9–§11、末尾的 Evaluation findings | 目标原文、已验证的部分、明确拒绝过的方案 |
-| `docs/goal-first-principles.md` | 本文批判的对象 |
-| `docs/traceability-plan.md` §0、§1、§4.0、§7 | 双向追溯的设计和评测计划 |
-| `docs/competitors/head-to-head.md` | 唯一一次在真实缺陷上的横向对比 |
-| `docs/field-study.md` §3.4、§7 | 需求文档发现在真实仓库上的噪声 |
-| `docs/token-anatomy.md` | 成本结构 |
-| `eval/replay/holdout-pairs.json`、`eval/replay/README.md` | 真实缺陷的类别分布 |
+| `docs/design.md` §0 (original goal text), Status, §9–§11, the Evaluation findings at the end | The original goal text, what has been verified, and approaches explicitly rejected |
+| `docs/goal-first-principles.md` | The subject of this document's critique |
+| `docs/traceability-plan.md` §0, §1, §4.0, §7 | The design and evaluation plan for two-way traceability |
+| `docs/competitors/head-to-head.md` | The only head-to-head comparison on real defects |
+| `docs/field-study.md` §3.4, §7 | Noise of requirement-document discovery on real repositories |
+| `docs/token-anatomy.md` | Cost structure |
+| `eval/replay/holdout-pairs.json`, `eval/replay/README.md` | Category distribution of real defects |
 
-## 1. 结论
+## 1. Conclusions
 
-1. **目标函数从来没有写下来。** 对 QE 来说，shift-left 的价值大致是：
-   > 本可在 PR 上发现的缺陷数 × 开发者真的改了的比例 × （在 QA 或生产发现的代价 − 在 PR 发现的代价） − 噪声、延迟和 token 成本
+1. **The objective function has never been written down.** For QE, the value of shift-left is roughly:
+   > number of defects that could have been found at the PR × proportion the developer actually fixed × (cost of finding it in QA or production − cost of finding it at the PR) − noise, latency, and token cost
 
-   仓库里有大量检出机制，但其余各项（可检出比例的上限、实际修复率、成本、延迟）在真实使用中**都没有测过**。下一步应先测这几项，再继续加机制（§2）。
-2. **双向追溯的论证是枚举出来的，不是按频率加权出来的。** 12 行状态矩阵说明「CI 绿时什么情况可能出错」，但不说明「这种情况多常见」。仓库自己的数据：
-   - head-to-head 里，**所有 direct hit 都来自代码与兄弟路径之间的测试缺口，没有一个来自 spec 比较**；
-   - 回放池中 13 对确认在范围内的缺陷，`requirement_mismatch` 只有 2 对，而且是**同一个 orpc 机制**；
-   - 这两对里的 R 是 **PR 自己写下的合并规则**，不是 spec 文档里的数值（§3 C2）。
-3. **追溯功能已默认开启（`trace: auto`），却从未做过 live 评测。** tr1–tr17 的 live eval 没有跑（`docs/design.md:432`），而计划自己定的门槛是 precision ≥90%。默认开着一个从未测量的功能，和仓库「先测量再升级」的原则相冲突（§3 C4）。
-4. **对原始需求只采用了一种解读。** 「coding standard has been confirmed」和「review requirements」都还有更字面、更便宜的读法：作者是否勾选了确认项；需求本身是否可测试。这两种读法都没有向用户确认过（N9、N10）。
-5. **核心路径从未在真实采用者的仓库里跑过。** S6 pilot 只跑过一次个人仓库；org 计费和 Claude 引擎都未验证；head-to-head 用的是 Sonnet 子 agent，而生产默认是 Copilot `auto`。现有证据都是离线模拟（§3 C7、C8）。
-6. **最大的 unknown unknowns 在系统边界上，不在算法里：**
-   - AI 写的 PR 被 preflight 跳过（N1）；
-   - coding agent 按 `missing_test` 补出来的测试是镜像测试，会把发现「洗」成 `covered`（N2）；
-   - 每次 push 都全量重审（N3）；
-   - 结果不稳定，加上 `resolve_stale` 自动关线程，会让线程反复开关（N4）；
-   - QE 自己拿不到任何汇总视图（N11）。
-7. **建议的下一步是一个零代码实验：** 用户从自己的缺陷系统取最近 50 个 QA 或生产缺陷，按 §6 P0-1 的表格分类。这一步决定上限，也决定该把投入放在哪一条轴上。在它之前，不要再加追溯机制。
+   The repository has plenty of detection mechanisms, but the other terms (the upper bound of the detectable proportion, the actual fix rate, cost, latency) have **all not been measured** in real use. The next step should be to measure these first, and only then keep adding mechanisms (§2).
+2. **The argument for two-way traceability was enumerated, not weighted by frequency.** The 12-row state matrix says "what can go wrong when CI is green", but not "how common each case is". The repository's own data:
+   - In head-to-head, **all direct hits came from test gaps between the code and sibling paths, and none from spec comparison**;
+   - Of the 13 pairs of confirmed in-scope defects in the replay pool, `requirement_mismatch` has only 2 pairs, and they are the **same orpc mechanism**;
+   - The R in these two pairs is **a merge rule written by the PR itself**, not a numeric value in a spec document (§3 C2).
+3. **The traceability feature is on by default (`trace: auto`), yet no live evaluation has ever been done.** The live eval of tr1–tr17 has not been run (`docs/design.md:432`), and the plan's own threshold is precision ≥90%. Having a never-measured feature on by default conflicts with the repository's principle of "measure first, then upgrade" (§3 C4).
+4. **Only one reading of the original requirement was adopted.** "coding standard has been confirmed" and "review requirements" both have more literal, cheaper readings: whether the author ticked a confirmation item; whether the requirement itself is testable. Neither reading has been confirmed with the user (N9, N10).
+5. **The core path has never run in a real adopter's repository.** The S6 pilot ran only once, on a personal repository; org billing and the Claude engine are both unverified; head-to-head used a Sonnet sub-agent, while the production default is Copilot `auto`. All existing evidence is offline simulation (§3 C7, C8).
+6. **The biggest unknown unknowns are at the system boundary, not in the algorithms:**
+   - PRs written by AI are skipped by preflight (N1);
+   - tests that a coding agent adds in response to `missing_test` are mirror tests, which "launder" a finding into `covered` (N2);
+   - every push triggers a full re-review (N3);
+   - unstable results, combined with `resolve_stale` auto-closing threads, make threads open and close repeatedly (N4);
+   - QE itself gets no aggregate view (N11).
+7. **The suggested next step is a zero-code experiment:** the user takes the most recent 50 QA or production defects from their own defect system and classifies them using the table in §6 P0-1. This step determines the upper bound and also which axis to invest in. Before it, do not add more traceability mechanisms.
 
-## 2. 第一性原理：QE 视角的 shift-left 目标函数
+## 2. First principles: the shift-left objective function from the QE perspective
 
-| 因子 | 问题 | 当前证据 | 状态 |
+| Factor | Question | Current evidence | Status |
 |---|---|---|---|
-| **上限 F** | 用户的 QA 或生产缺陷中，有多少在 PR 时刻能被静态看出来（逻辑、边界、校验、需求不符、测试缺口）？ | 只有 OSS 库的数据：holdout 池 69 对中 63 对 `scope=in`。库项目以逻辑为主，样本有选择偏差 | **用户的仓库未知** |
-| **检出 D** | 范围内的缺陷有多少被命中？ | head-to-head：lean 7/12，copilot 风格 8/12，pocock 风格 9/12。n=12，差距在噪声内 | 召回不是优势 |
-| **行动 A** | 命中之后，开发者有多少真的改了？ | 只有 judge 给的 `would_fix` 代理指标：lean 13/22=59%。从未测过 did-fix | **未测** |
-| **成本差 ΔC** | 在 PR 发现比在 QA 发现省多少？ | 「1:100」是 leprechaun（`goal-first-principles.md` §3）。省下的主要是 QA 轮次和反馈周期，大小取决于 QA 在流水线中的位置（N6） | **未定义** |
-| **代价 K** | 噪声、PR 变慢、token、合规 | 每次运行约 559k 累计输入 token（模拟值），比自由格式 review 多约 50%；从未测过 time-to-merge；每次 push 都重跑（N3） | 部分测过 |
+| **Upper bound F** | Of the user's QA or production defects, how many can be seen statically at PR time (logic, boundary, validation, requirement mismatch, test gap)? | Only OSS library data: 63 of the 69 pairs in the holdout pool are `scope=in`. Library projects are mostly logic, and the sample has selection bias | **Unknown for the user's repositories** |
+| **Detection D** | How many in-scope defects are hit? | head-to-head: lean 7/12, copilot style 8/12, pocock style 9/12. n=12, the gaps are within noise | Recall is not an advantage |
+| **Action A** | After a hit, how many did the developer actually fix? | Only the proxy metric `would_fix` given by the judge: lean 13/22=59%. did-fix has never been measured | **Not measured** |
+| **Cost difference ΔC** | How much is saved by finding at the PR rather than in QA? | "1:100" is a leprechaun (`goal-first-principles.md` §3). What is saved is mainly QA rounds and feedback cycles, and the size depends on where QA sits in the pipeline (N6) | **Undefined** |
+| **Cost K** | Noise, slower PRs, tokens, compliance | About 559k cumulative input tokens per run (simulated value), about 50% more than free-form review; time-to-merge has never been measured; re-runs on every push (N3) | Partly measured |
 
-推论：
-- **净价值 = F·D·A·ΔC − K**。现在只有 D 有数据，而且是离线数据。
-- 后续每一项工作都应回答：它改的是哪个因子，改多少。追溯功能改的是 D 中「需求不符」那一小部分，而这部分本身的占比（F 里的份额）没人测过。
-- 这条式子也说明 SpecGuard 应该让 **A 尽量高、K 尽量低**，而不是追求 D 最高。这和 head-to-head 的结论一致：优势在精度，不在召回。
+Inferences:
+- **Net value = F·D·A·ΔC − K**. Currently only D has data, and it is offline data.
+- Every later piece of work should answer: which factor does it change, and by how much. The traceability feature changes the small "requirement mismatch" part of D, and the share of that part itself (its share within F) has not been measured by anyone.
+- This formula also says SpecGuard should make **A as high and K as low as possible**, rather than pursuing the highest D. This is consistent with the head-to-head conclusion: the advantage is in precision, not recall.
 
-## 3. 对现有分析的批判
+## 3. Critique of the existing analysis
 
-### C1 状态空间枚举 ≠ 频率加权
+### C1 Enumerating the state space ≠ frequency weighting
 
-`goal-first-principles.md` §2 的矩阵作为**评测覆盖清单**是对的：每一行都应有一个用例。但它被当成了**投入优先级的依据**（「双向追溯不是附加功能」）。
+The matrix in `goal-first-principles.md` §2 is right as an **evaluation coverage checklist**: every row should have a test case. But it was used as the **basis for investment priority** ("two-way traceability is not an add-on feature").
 
-决定优先级的应该是 *Σ 状态频率 × 该状态下缺陷的代价*。仓库里已有的频率证据都指向反方向：
-- head-to-head：追溯贡献的 direct hit 为 0。
-- holdout 池：确认在范围内的 13 对里，logic 8、validation 3、requirement_mismatch 2。这 2 对是同一个机制（`orpc-2098<-1705`、`<-1718`）。
-- field study：12 个仓库里 7 个根本没有需求文档。
+What should decide priority is *Σ state frequency × cost of the defect in that state*. The frequency evidence already in the repository all points the opposite way:
+- head-to-head: traceability contributed 0 direct hits.
+- holdout pool: of the 13 confirmed in-scope pairs, logic 8, validation 3, requirement_mismatch 2. These 2 pairs are one mechanism (`orpc-2098<-1705`, `<-1718`).
+- field study: 7 of the 12 repositories have no requirement document at all.
 
-这三份数据都不代表用户的仓库，但它们是仓库里**仅有**的频率数据，而且方向一致。
+None of these three sets of data represents the user's repositories, but they are the **only** frequency data in the repository, and they point in the same direction.
 
-### C2 「需求不符」的真实形态和机制的假设不一样
+### C2 The real shape of a "requirement mismatch" differs from the mechanism's assumption
 
-追溯 v1 的机制按「spec 文档里的数值被改了」来设计：`deltas`、带单位变体的出现位置表、30→45、2×→3×。种子用例 tr1–tr17 也几乎都是数值字面量。
+The traceability v1 mechanism was designed around "a numeric value in a spec document was changed": `deltas`, an occurrence table with unit variants, 30→45, 2×→3×. The seeded cases tr1–tr17 are also almost all numeric literals.
 
-回放池里真实的需求不符是另一种样子：
-- `orpc-2098`：「Code disagrees with the **PR's own documented merge rule**」。
-- `orpc-2057`：「Schema requires a field the handler never sends」。
+The real requirement mismatches in the replay pool look different:
+- `orpc-2098`: "Code disagrees with the **PR's own documented merge rule**".
+- `orpc-2057`: "Schema requires a field the handler never sends".
 
-两者的 R 都**在同一个 PR 或相邻的代码里**（PR 写下的规则、文档注释、schema），是语义层面的，不是数值。
+In both, R is **in the same PR or in adjacent code** (a rule the PR wrote, a doc comment, a schema), at the semantic level, not numeric.
 
-**需要验证的假设：** 在这类 PR 里，R 有没有被我们自己的 collector 丢掉？非需求类的 `.md` 改动仍然会被 `collect.sh` 从 diff 里删掉。如果 PR 在 `docs/` 写了规则、在代码里实现错了，那么 R 恰好就在被删掉的那部分里。接手者应拿这三个 case 核对，看 R 实际放在哪个文件、collector 有没有保留它。
+**Hypothesis to verify:** In PRs like these, was R dropped by our own collector? Non-requirement `.md` changes are still removed from the diff by `collect.sh`. If a PR wrote the rule in `docs/` and implemented it wrongly in code, then R happens to lie exactly in the part that is removed. The person taking over should check these three cases, to see which file R actually lives in and whether the collector kept it.
 
-**构造效度问题：** 种子用例只覆盖机制擅长的形态，所以 tr 用例全过，也证明不了对真实需求不符有效。
+**Construct validity problem:** The seeded cases only cover the forms the mechanism is good at, so even if all tr cases pass, that cannot prove effectiveness on real requirement mismatches.
 
-### C3 理论自洽，数据反向，结论却没有改
+### C3 The theory is self-consistent, the data points the other way, yet the conclusion did not change
 
-`design.md` 末尾第 5 节已经写了「Traceability value is not proven on real repos」，head-to-head 也建议「tighten `trace: auto` to strong signals」。但默认值仍然是 `auto`，计划里排在后面的仍然是 WP7 变异基准和 WP8 SZZ（更多追溯评测），而不是先验证核心路径。
+Section 5 at the end of `design.md` already wrote "Traceability value is not proven on real repos", and head-to-head also suggested "tighten `trace: auto` to strong signals". But the default is still `auto`, and what is queued later in the plan is still WP7 mutation benchmark and WP8 SZZ (more traceability evaluation), rather than first validating the core path.
 
-**发现了，但没有据此改决策。** 这是本文最想纠正的一点。
+**It was found, but the decision was not changed accordingly.** This is the point this document most wants to correct.
 
-### C4 默认开启的功能违反了仓库自己的门槛
+### C4 A default-on feature violates the repository's own threshold
 
-- 门槛：`traceability-plan.md` §7.2 要求 precision ≥90%、recall ≥80%。
-- 现状：live 评测从未跑过。
-- discovery 修复后的精度（strict 66%）来自一份**未提交的 harness 副本**，无法从仓库复现（`field-study.md` §7）。
-- 风险：采用者第一次见到 SpecGuard，看到的可能就是一条噪声 `spec_mismatch`。需求类评论本来就是采纳率最低的一类（RevMate：功能类建议 5.2%）。
+- Threshold: `traceability-plan.md` §7.2 requires precision ≥90% and recall ≥80%.
+- Current state: the live evaluation has never been run.
+- The precision after the discovery fix (strict 66%) comes from an **uncommitted copy of the harness** and cannot be reproduced from the repository (`field-study.md` §7).
+- Risk: an adopter's first encounter with SpecGuard may be a noisy `spec_mismatch`. Requirement-type comments are already the class with the lowest adoption rate (RevMate: functional suggestions 5.2%).
 
-### C5 「shift-left」的参照系没有定义
+### C5 The frame of reference for "shift-left" is undefined
 
-「左」是相对于 QA 而言的。QA 在流水线里的位置决定 SpecGuard 是否真的更早：
-- QA 测合并后的 staging 构建：PR 时刻确实更早。
-- QA 在每个 PR 的 preview 环境里测：SpecGuard 和 QA 处在**同一时刻**，价值就变成「替 QA 省时间」，而不是「更早」。
+"Left" is relative to QA. Where QA sits in the pipeline decides whether SpecGuard is really earlier:
+- QA tests the post-merge staging build: the PR moment is indeed earlier.
+- QA tests in each PR's preview environment: SpecGuard and QA are at **the same moment**, and the value becomes "save QA time" rather than "earlier".
 
-还有比 PR 更左的点：本地 pre-push（仓库已经支持 `claude -p` / `copilot -p` 跑同一个 skill）；更左的是写需求的时候（N10）。这些点都没有被当作产品面来设计和测量。
+There are also points further left than the PR: local pre-push (the repository already supports running the same skill with `claude -p` / `copilot -p`); further left still is when requirements are being written (N10). None of these points has been designed or measured as a product surface.
 
-### C6 原始需求只取了一种解读
+### C6 Only one reading of the original requirement was taken
 
-见 N9（「confirmed」）、N10（「review requirements」）。这两处都是**用户才能裁决的**，仓库里没有记录用户确认过。
+See N9 ("confirmed") and N10 ("review requirements"). Both are **for the user alone to decide**, and the repository has no record of the user confirming.
 
-### C7 评测是自我参照的
+### C7 The evaluation is self-referential
 
-- 被测的是 Sonnet 子 agent，裁判是三个 Sonnet adjudicator，同一家族；两轮裁判之间的差距（84% 对 100%）已经说明方差很大。
-- 生产默认引擎是 Copilot `auto`，模型路由每次可能不同，而真实的 Copilot 从未在 head-to-head 里跑过。
-- 有两样东西完全没有数据：严格 JSON 契约在被路由到的较弱模型上的失败率（也就是摘要显示「Could not complete」的比例），以及 adjudicator 与人工判断的一致率。
+- The subject under test is a Sonnet sub-agent, and the judges are three Sonnet adjudicators, the same family; the gap between two rounds of judging (84% versus 100%) already shows that the variance is large.
+- The production default engine is Copilot `auto`, where model routing may differ each time, and real Copilot has never been run in head-to-head.
+- Two things have no data at all: the failure rate of the strict JSON contract on the weaker models routed to (that is, the proportion where the summary shows "Could not complete"), and the agreement rate between adjudicators and human judgment.
 
-### C8 范围持续扩张，核心验收却停着
+### C8 Scope keeps expanding, while core acceptance stalls
 
-原始目标是 unit test review。目前在建或已建的还有：双向追溯、`spec_mismatch`、blame 历史意图、出现位置表、SZZ、变异基准、field harness、CCR 模式、竞品对比。
+The original goal was unit test review. Also under construction or already built: two-way traceability, `spec_mismatch`, blame for historical intent, the occurrence table, SZZ, mutation benchmark, field harness, CCR mode, competitor comparison.
 
-与此同时，`design.md` §9 的 **S4（引擎、org 计费）和 S6（3 个 pilot）都没有完成**。这些扩张没有一项能替代真实 pilot。按 ponytail 的标准：**目前被证明有价值的，正是最简单的那部分**，即 diff 范围内的测试缺口审查加确定性校验。
+Meanwhile, **S4 (engine, org billing) and S6 (3 pilots) of `design.md` §9 are both unfinished**. None of these expansions can replace a real pilot. By ponytail's standard: **what has been proven valuable so far is exactly the simplest part**, i.e. test-gap review within the diff scope plus deterministic validation.
 
-## 4. 「双向定位」的重新定位
+## 4. Repositioning "two-way localization"
 
-### 4.1 追溯应是有条件的模块，不是默认能力
+### 4.1 Traceability should be a conditional module, not a default capability
 
-追溯的价值取决于一个前提：**团队是否采用 spec-driven development（SDD）**。
+The value of traceability depends on one premise: **whether the team adopts spec-driven development (SDD)**.
 
-| 仓库类型 | R 在哪里 | 追溯的价值 | 默认行为（建议） |
+| Repository type | Where R is | Value of traceability | Default behavior (suggested) |
 |---|---|---|---|
-| SDD 仓库：`.kiro/specs`、`openspec/`、Spec Kit `specs/`、带显式 ID 的需求、`.feature` | 仓库内，结构化 | **核心价值**：AI agent 按 spec 实现，spec 就是 R，场景 B 很常见 | 开 |
-| 有零散「must」散文（README、指南）的普通仓库 | 文档里有，但是文档不是需求 | 低。命中多半是文档漂移，应由文档负责人处理（U17） | **关**，或只进摘要 |
-| R 在 Jira、ADO、Confluence（企业 QE 的常态） | 仓库外 | 被「不加新 secret」的约束**结构性排除**（N8） | 靠 PR 模板把 R 带进 PR（§6 P1-1） |
+| SDD repository: `.kiro/specs`, `openspec/`, Spec Kit `specs/`, requirements with explicit IDs, `.feature` | In the repository, structured | **Core value**: the AI agent implements per the spec, the spec is R, and scenario B is very common | On |
+| Ordinary repository with scattered "must" prose (README, guides) | In documents, but a document is not a requirement | Low. Hits are mostly documentation drift, which the document owner should handle (U17) | **Off**, or summary only |
+| R is in Jira, ADO, Confluence (the norm for enterprise QE) | Outside the repository | **Structurally excluded** by the "no new secrets" constraint (N8) | Bring R into the PR via a PR template (§6 P1-1) |
 
-所以 `trace: auto` 的触发条件应从「发现任何需求文档」收紧为「**发现强信号**」：SDD 目录、显式 ID 条目、Gherkin `.feature`。泛泛的 normative 散文默认不触发。这需要用户决定（§7 Q2）。
+So the trigger condition of `trace: auto` should be tightened from "any requirement document found" to "**a strong signal found**": an SDD directory, items with explicit IDs, Gherkin `.feature`. Generic normative prose does not trigger it by default. This needs the user's decision (§7 Q2).
 
-### 4.2 R 的来源按成本和精度重排
+### 4.2 Reorder the sources of R by cost and precision
 
-| 排序 | 来源 | 成本 | 精度 | 当前状态 |
+| Rank | Source | Cost | Precision | Current state |
 |---|---|---|---|---|
-| 1 | **PR 自身的声明**：PR 正文、同一 PR 改动的文档、docstring、schema | 0（已在手边） | 高：作者自己说的 | PR 正文已经收集；同一 PR 的非需求 `.md` 会被丢弃（C2 的假设） |
-| 2 | **PR 模板里的 AC 段落**（流程改动，不写代码） | 0 代码 | 高 | `extractCriteria` 已能识别 AC 标题；缺的是模板本身和推广 |
-| 3 | 关联的 issue | 低 | 中到高 | 已实现，但很多 PR 不关联 issue |
-| 4 | SDD spec 目录、显式 ID 条目 | 中 | 中到高 | 已实现，混在泛化发现里 |
-| 5 | 泛化 normative 散文 | 高（噪声） | 低（field study） | 默认开着，建议降级 |
-| 6 | blame 找回的历史意图 | 中 | 低（可能已过时） | 已实现，属于可选来源 |
+| 1 | **The PR's own statements**: PR body, documents changed in the same PR, docstrings, schemas | 0 (already at hand) | High: what the author says himself | The PR body is already collected; non-requirement `.md` in the same PR is discarded (the hypothesis of C2) |
+| 2 | **The AC section in the PR template** (a process change, no code) | 0 code | High | `extractCriteria` can already recognize AC headings; what is missing is the template itself and promotion |
+| 3 | Linked issue | Low | Medium to high | Implemented, but many PRs do not link an issue |
+| 4 | SDD spec directory, items with explicit IDs | Medium | Medium to high | Implemented, mixed into generalized discovery |
+| 5 | Generic normative prose | High (noise) | Low (field study) | On by default, suggest downgrading |
+| 6 | Historical intent recovered by blame | Medium | Low (may be outdated) | Implemented, an optional source |
 
-**要点：** 「把 R 捕获左移」本身就是 shift-left。让作者在 PR 里写下 AC，比事后用启发式去挖文档便宜，也准确。这是 QE 能直接推动的流程杠杆，不需要写代码。
+**Key point:** "Moving R capture left" is itself shift-left. Having the author write the AC in the PR is cheaper and more accurate than digging documents out afterwards by heuristics. This is a process lever that QE can push directly, with no code to write.
 
-### 4.3 还有一组被忽略的「双向」：开发者 ↔ QA
+### 4.3 There is also an ignored "two-way": developer ↔ QA
 
-当前的信息只从 SpecGuard 流向开发者。QE 关心的另外两个方向都不存在：
-- **向右，SpecGuard → QA：** 告诉 QA 哪些 PR、哪些 AC 只有 `needs_human`、`higher_level_only` 或 `unknown`，好让 QA 做基于风险的测试。目前没有汇总输出（N11）。
-- **向左，QA → SpecGuard：** 逃逸缺陷回流成评测样本和规则（SZZ 是离线做法）。目前没有常态化机制。
+Currently information flows only from SpecGuard to the developer. The other two directions QE cares about do not exist:
+- **To the right, SpecGuard → QA:** tell QA which PRs and which ACs have only `needs_human`, `higher_level_only`, or `unknown`, so QA can do risk-based testing. There is currently no aggregate output (N11).
+- **To the left, QA → SpecGuard:** escaped defects flow back as evaluation samples and rules (SZZ is the offline way). There is currently no routine mechanism.
 
-对 QE 来说，这条闭环可能比需求和代码之间的双向更有价值。是否纳入范围由用户决定（§7 Q5）。
+For QE, this loop may be more valuable than the two-way between requirements and code. Whether to include it in scope is the user's decision (§7 Q5).
 
-## 5. 新发现的 unknown unknowns（N1–N18）
+## 5. Newly found unknown unknowns (N1–N18)
 
-视角：⑧ 系统边界（与其他工具和 agent 的交互），⑨ 经济性，⑩ 组织与流程，⑪ 度量有效性。①–⑦ 沿用 `goal-first-principles.md` §4.1。
+Perspectives: ⑧ system boundary (interaction with other tools and agents), ⑨ economics, ⑩ organization and process, ⑪ validity of measurement. ①–⑦ continue from `goal-first-principles.md` §4.1.
 
-| ID | 盲点 | 视角 | 影响 | 证据或状态 | 最便宜的验证 | 成本 |
+| ID | Blind spot | Perspective | Impact | Evidence or status | Cheapest verification | Cost |
 |---|---|---|---|---|---|---|
-| **N1** | **AI 写的 PR 被跳过。** `preflight.js:15` 跳过所有 `type==='Bot'` 或 `[bot]` 作者。若 Copilot coding agent 等 agent 以 Bot 身份开 PR，那么增长最快、最容易出现 C=T≠R 的 PR 来源正好不被审查 | ⑧ | 召回，覆盖面 | 代码已核实；agent 的 PR 作者类型**未核实** | 在用户的 org 里看一个 agent PR 的 `user.type`。可以考虑把 agent 与依赖机器人（Dependabot、Renovate）分开处理 | S |
-| **N2** | **Goodhart 闭环。** coding agent，或赶时间的人，按 `missing_test` 的骨架补测试，期望值从实现里抄，发现就被「洗」成 `covered`。`goal-first-principles.md` 结论 3 说过 AI 测试容易固化错误，但没有想到 **SpecGuard 自己的评论会触发这种固化** | ⑧⑪ | 精度：错误的放心 | 未测 | 骨架的期望值必须引用 R 的原文（有 R 时）；R 缺失时，骨架用占位符而不是从代码推出的值（G4 占位规则已经存在，可以复用）；评测增加「按评论补镜像测试」的对抗用例 | S |
-| **N3** | **成本随 push 次数增长，不随 PR 数增长。** 每次 `synchronize` 都全量重审，同一个 SHA 才会跳过。累计输入约 500k token/次，主要来自静态 prompt × 轮数（`token-anatomy.md`）。没有增量审查 | ⑨ | K | 未测每个 PR 平均 push 几次 | 用 `gh api` 统计 pilot 仓库每个 PR 的 push 次数；考虑只在 `ready_for_review` 或打标签时触发，或者只审上次审过之后的增量 | S–M |
-| **N4** | **结果不稳定 × `resolve_stale`。** 同一个缺口这次报、下次没报，线程就被自动关掉，再下次又冒出来。线程反复开关会损害信任 | ⑧ | 采纳 | `resolve_stale` 默认开；U15 只测过稳定性，没测与自动关闭的交互 | 同一个 PR 连续空 push 3 次（`force: true`），统计线程开关次数 | S |
-| **N5** | **评审到达时 PR 已经合并。** auto-merge 打开时，CI 一绿就合并，SpecGuard 最长 12 分钟，可能晚到 | ⑩ | A=0 | 未测 | pilot 中记录「评论时间晚于合并时间」的比例 | S |
-| **N6** | **QA 在流水线中的位置**（见 C5），它决定 ΔC 的大小，以及「左移」是否成立 | ⑩ | 整个价值主张 | 未知 | 问用户 | 0 |
-| **N7** | **上限 F 因组织而异。** OSS 库约 91% 在范围内；Web 应用的 QA 缺陷里，UI、集成、环境类可能占多数 | ⑩⑪ | 价值上限 | 只有 OSS 数据 | §6 P0-1：50 个缺陷的分类 | 0 代码 |
-| **N8** | **企业的 R 在仓库外**（Jira、ADO、Confluence），「只用 GitHub Actions、不加新 secret」的约束把它排除在外。PR 标题里的 ticket key 能拿到，ticket 正文拿不到 | ⑩ | 需求轴在企业环境里拿不到输入 | 约束来自用户原话（被截断）；`design.md` 已拒绝 ticket key 解析 | 问用户 R 在哪里；可选方案：PR 模板（零 secret），或者一个可选的 tracker secret（违反约束，需要用户放行） | 0 / M |
-| **N9** | **「coding standard has been confirmed」的字面读法**：PR 模板里「我已遵守编码规范」这一项有没有被勾选。这是一条确定性的流程合规检查，一个正则就够。当前实现的是 lint 证据加 AI 静态审查，没实现这一种 | ⑤ | 原始需求的符合度 | `research-goal-audit.md` 只提到「作者 checkbox 只能算人工声明」，没有问过用户 | 问用户三种读法要哪几种（§7 Q3） | S |
-| **N10** | **「review requirements」的另一种读法**：审查需求本身是否可测试、有没有歧义。这是 QE 最经典的左移活动（three amigos）。当前把 R 只当作 oracle。U10 提过，但归在「扩展边界」 | ⑤ | 原始需求的符合度 | 未确认 | 问用户 | 0 |
-| **N11** | **QE 拿不到汇总视图。** 输出只面向开发者（inline 评论和 sticky summary）。QE 作为买单方，需要按仓库或团队看趋势：缺口类别、处理率、AC 覆盖、`needs_human` 清单。数据其实已有（每次运行的 findings、fingerprint），只是没有落地 | ⑩ | 采纳，持续投入的理由 | 未实现 | 最小做法：每次运行上传一个 `findings.json` artifact，再写一个离线聚合脚本。不做 dashboard | S |
-| **N12** | **`Unit evidence X/Y` 被当成 KPI。** 管理者会把它读成覆盖率，被考核之后会被刷 | ⑪ | 度量被扭曲 | 文案已写明是静态判断 | 摘要里加一句「不是覆盖率，不能用于考核」；聚合视图不展示比值排名 | S |
-| **N13** | **评测引擎 ≠ 生产引擎。** Copilot `auto` 的路由不确定，严格 JSON 的失败率、轮数、超时率在真实 org 里都没测过 | ⑪ | D 和可用性 | `design.md` 第 9 节 Open items：「No real Copilot run」 | pilot 记录每次运行的完成状态、轮数、耗时 | S |
-| **N14** | **测试层级和 pushdown 的定义因组织而异。** pyramid 和 trophy 两种策略本来就有分歧；Pocock 的 tdd 倾向于走公开接口的集成测试。pushdown 可能违背团队的测试策略 | ⑤ | 精度 | `design.md`：「Pushdown suggestions are not validated」 | 层级定义从仓库的标准文件读取；没有定义时，pushdown 只进摘要 | S |
-| **N15** | **代码外发的合规问题。** 企业的数据政策可能直接禁止把代码发给 Copilot 或 Anthropic | ⑩ | 能否采用 | `design.md` §12 Q3 一直没有答案 | 问用户 | 0 |
-| **N16** | **多个机器人的评论叠加。** 原生 CCR、SpecGuard、CodeRabbit 等同时评论，没有跨工具去重 | ⑧ | K | 「Not in v1」里有同行去重的触发条件 | pilot 中统计每个 PR 的机器人评论总数 | S |
-| **N17** | **SZZ 看不见的缺陷。** QA 在 PR 或 preview 阶段发现、并在同一个 PR 里修掉的缺陷，不会出现在主干历史里。如果用户的 QA 是在 PR 阶段测的，L4 回放恰好漏掉 shift-left 的目标样本 | ⑪ | 评测有效性 | 未讨论 | 结合 N6，从缺陷系统取样，而不是只从 git 历史取 | 0 |
-| **N18** | **`would_fix` ≠ did-fix。** 现在用 judge 判断「会不会改」。真实的修复率可以确定性地算出来：某个 fingerprint 在 SHA n 出现，在 SHA n+1 消失，并且其锚点行被改过 | ⑪ | A 的测量 | `resolve_stale` 已经在比较 fingerprint，但没有记录 | 在 N11 的 artifact 里加 fix-through 字段 | S |
+| **N1** | **PRs written by AI are skipped.** `preflight.js:15` skips all authors with `type==='Bot'` or `[bot]`. If an agent such as the Copilot coding agent opens PRs as a Bot, then the fastest-growing PR source, and the one most prone to C=T≠R, is exactly the one not reviewed | ⑧ | Recall, coverage | Code verified; the agent's PR author type is **not verified** | In the user's org, look at the `user.type` of one agent PR. Consider treating agents separately from dependency bots (Dependabot, Renovate) | S |
+| **N2** | **Goodhart loop.** A coding agent, or a person in a hurry, adds tests following the skeleton in `missing_test`, copying the expected values from the implementation, and the finding gets "laundered" into `covered`. Conclusion 3 of `goal-first-principles.md` said AI tests tend to cement errors, but did not foresee that **SpecGuard's own comments can trigger this cementing** | ⑧⑪ | Precision: false reassurance | Not measured | The skeleton's expected values must quote the original text of R (when R exists); when R is missing, the skeleton uses placeholders rather than values inferred from code (the G4 placeholder rule already exists and can be reused); add to the evaluation an adversarial case of "mirror tests added per the comment" | S |
+| **N3** | **Cost grows with the number of pushes, not the number of PRs.** Every `synchronize` triggers a full re-review, and only the same SHA is skipped. Cumulative input is about 500k tokens per run, mainly from static prompt × number of rounds (`token-anatomy.md`). There is no incremental review | ⑨ | K | Average pushes per PR not measured | Use `gh api` to count the number of pushes per PR in the pilot repository; consider triggering only at `ready_for_review` or when a label is applied, or reviewing only the increment since the last reviewed state | S–M |
+| **N4** | **Unstable results × `resolve_stale`.** The same gap is reported this time and not the next, the thread is auto-closed, and then it reappears the time after. Threads opening and closing repeatedly harms trust | ⑧ | Adoption | `resolve_stale` is on by default; U15 only tested stability, not its interaction with auto-close | On the same PR, make 3 empty pushes in a row (`force: true`), and count thread open/close events | S |
+| **N5** | **The PR is already merged when the review arrives.** When auto-merge is on, the merge happens as soon as CI is green, and SpecGuard, which takes up to 12 minutes, may arrive late | ⑩ | A=0 | Not measured | In the pilot, record the proportion where "comment time is later than merge time" | S |
+| **N6** | **Where QA sits in the pipeline** (see C5), which determines the size of ΔC and whether "shift-left" holds | ⑩ | The whole value proposition | Unknown | Ask the user | 0 |
+| **N7** | **The upper bound F varies by organization.** About 91% of OSS library defects are in scope; among a web application's QA defects, UI, integration, and environment types may be the majority | ⑩⑪ | Value upper bound | Only OSS data | §6 P0-1: classification of 50 defects | 0 code |
+| **N8** | **An enterprise's R is outside the repository** (Jira, ADO, Confluence), and the constraint "only GitHub Actions, no new secrets" excludes it. The ticket key in the PR title can be obtained, but the ticket body cannot | ⑩ | The requirement axis gets no input in enterprise environments | The constraint comes from the user's words (truncated); `design.md` already rejected ticket key parsing | Ask the user where R is; optional approaches: a PR template (zero secrets), or an optional tracker secret (violates the constraint, needs the user's clearance) | 0 / M |
+| **N9** | **The literal reading of "coding standard has been confirmed"**: whether the item "I have followed the coding standard" in the PR template was ticked. This is a deterministic process-compliance check, and a single regex is enough. The current implementation is lint evidence plus AI static review, and does not implement this reading | ⑤ | Conformance to the original requirement | `research-goal-audit.md` only mentioned that "an author checkbox can only count as a human declaration", and never asked the user | Ask the user which of the three readings are wanted (§7 Q3) | S |
+| **N10** | **Another reading of "review requirements"**: review whether the requirement itself is testable and unambiguous. This is the most classic left-shift activity for QE (three amigos). The current approach treats R only as an oracle. U10 mentioned it, but filed it under "extending the boundary" | ⑤ | Conformance to the original requirement | Unconfirmed | Ask the user | 0 |
+| **N11** | **QE cannot get an aggregate view.** Output is aimed only at developers (inline comments and the sticky summary). QE, as the party paying, needs to see trends by repository or team: gap categories, handling rate, AC coverage, the `needs_human` list. The data actually exists (findings and fingerprints of each run), but is not persisted | ⑩ | Adoption, the reason for continued investment | Not implemented | Minimal approach: upload a `findings.json` artifact on every run, plus an offline aggregation script. No dashboard | S |
+| **N12** | **`Unit evidence X/Y` gets treated as a KPI.** Managers will read it as coverage, and once it is used for assessment it will be gamed | ⑪ | Metric distortion | The wording already says it is a static judgment | Add a sentence to the summary "not coverage, not for assessment"; the aggregate view does not display ratio rankings | S |
+| **N13** | **Evaluation engine ≠ production engine.** Copilot `auto` routing is uncertain, and the failure rate of strict JSON, the number of rounds, and the timeout rate have not been measured in a real org | ⑪ | D and availability | `design.md` section 9 Open items: "No real Copilot run" | The pilot records the completion status, rounds, and elapsed time of every run | S |
+| **N14** | **The definition of test layers and pushdown varies by organization.** The pyramid and trophy strategies already disagree; Pocock's tdd favors integration tests that go through public interfaces. Pushdown may go against the team's testing strategy | ⑤ | Precision | `design.md`: "Pushdown suggestions are not validated" | Read the layer definitions from the repository's standards files; when there is no definition, pushdown goes only to the summary | S |
+| **N15** | **Compliance of sending code out.** An enterprise's data policy may directly forbid sending code to Copilot or Anthropic | ⑩ | Whether it can be adopted | `design.md` §12 Q3 has never had an answer | Ask the user | 0 |
+| **N16** | **Comments from multiple bots stack up.** Native CCR, SpecGuard, CodeRabbit, and others comment at the same time, with no cross-tool deduplication | ⑧ | K | The trigger condition for peer deduplication is in "Not in v1" | In the pilot, count the total number of bot comments per PR | S |
+| **N17** | **Defects SZZ cannot see.** A defect that QA finds at the PR or preview stage and fixes in the same PR never shows up in mainline history. If the user's QA tests at the PR stage, L4 replay exactly misses the target samples of shift-left | ⑪ | Evaluation validity | Not discussed | Combined with N6, sample from the defect system rather than only from git history | 0 |
+| **N18** | **`would_fix` ≠ did-fix.** Currently the judge decides "would it be changed". The real fix rate can be computed deterministically: a fingerprint appears at SHA n, disappears at SHA n+1, and its anchor line was modified | ⑪ | Measurement of A | `resolve_stale` already compares fingerprints, but does not record them | Add a fix-through field to the artifact of N11 | S |
 
-**优先级：**
-- P0：N6、N7、N8、N9 只需要向用户提问或做分类，不写代码，但会改变后面所有决策。
-- P1：N1、N2、N3、N13 决定 pilot 的结论能不能信。
-- P2：其余，等 pilot 数据出来再定。
+**Priority:**
+- P0: N6, N7, N8, N9 only need questions to the user or classification, no code, but will change all later decisions.
+- P1: N1, N2, N3, N13 decide whether the pilot's conclusion can be trusted.
+- P2: the rest, to be decided after the pilot data comes in.
 
-## 6. 建议的执行顺序
+## 6. Suggested order of execution
 
-### P0：先测上限，再决定往哪里投入（零代码或极少代码）
+### P0: first measure the upper bound, then decide where to invest (zero or very little code)
 
-1. **对 50 个缺陷做分类（由用户执行，接手者提供表格）。** 从用户的 issue tracker 取最近 50 个 QA 或生产缺陷，每个填下表：
+1. **Classify 50 defects (done by the user, with the successor providing the table).** From the user's issue tracker, take the most recent 50 QA or production defects, and fill in the table below for each:
 
-   | 字段 | 取值 |
+   | Field | Values |
    |---|---|
-   | 发现阶段 | PR、QA（PR 前 / PR 后）、生产 |
-   | 静态可见 | 是 / 否（原因：环境、集成时序、UI、性能、第三方） |
-   | 类别 | 逻辑、边界、校验、错误处理、需求不符、缺测试 |
-   | 当时有没有写下来的 R | PR 正文、issue、spec、无；R 在哪个系统 |
-   | 一个单元测试能否拦住 | 是 / 否 / 只有集成测试能 |
-   | 引入它的 PR 能否找到 | 是 / 否 |
+   | Stage found | PR, QA (before PR / after PR), production |
+   | Statically visible | yes / no (reason: environment, integration timing, UI, performance, third party) |
+   | Category | logic, boundary, validation, error handling, requirement mismatch, missing test |
+   | Was there a written-down R at the time | PR body, issue, spec, none; in which system R lives |
+   | Could a unit test have caught it | yes / no / only an integration test could |
+   | Can the PR that introduced it be found | yes / no |
 
-   **决策规则（建议，由用户确认）：**
-   - 「需求不符」且「R 写在仓库内」的占比低于 10%：追溯改为 opt-in，资源回到测试缺口和流程。
-   - 「静态可见」低于 40%：对外重新说明 SpecGuard 的定位（只拦逻辑类缺陷），QE 价值主张转向 N11 风险报告。
-   - 「R 在 Jira 等」占多数：先做 PR 模板（P1-1），而不是继续做文档发现。
+   **Decision rules (suggested, to be confirmed by the user):**
+   - If the share of "requirement mismatch" with "R written in the repository" is below 10%: make traceability opt-in, and return resources to test gaps and process.
+   - If "statically visible" is below 40%: restate SpecGuard's positioning externally (only intercepts logic-type defects), and turn the QE value proposition toward the N11 risk report.
+   - If "R in Jira and similar" is the majority: first do the PR template (P1-1), rather than continuing with document discovery.
 
-2. **决定 `trace` 的默认值（用户决定）。** 三个选项：
-   - (a) 改为 `off`，需要的人显式打开；
-   - (b) 只在强信号下开启（SDD 目录、显式 ID、`.feature`）；
-   - (c) 保持 `auto`。
+2. **Decide the default of `trace` (the user decides).** Three options:
+   - (a) change to `off`, and those who need it turn it on explicitly;
+   - (b) turn on only with a strong signal (SDD directory, explicit ID, `.feature`);
+   - (c) keep `auto`.
 
-   建议 **(b)**，并在 tr 用例的 live eval 过门槛之前，把 `spec_mismatch` 限制为只进摘要。
+   We suggest **(b)**, and until the live eval of the tr cases clears the threshold, restrict `spec_mismatch` to the summary only.
 
-3. **在用户的真实仓库里跑 pilot（S6）。** 用生产引擎（Copilot），跑 2–4 周。每次运行记录：
-   - 完成状态（N13）、轮数、耗时；
-   - 评论是否晚于合并（N5）；
-   - 每个 PR 的 push 次数和运行次数（N3）；
-   - 每个 PR 的机器人评论总数（N16）；
-   - fix-through（N18）；
-   - 按类别的处理率和驳回率。
+3. **Run a pilot (S6) in the user's real repository.** Use the production engine (Copilot), for 2–4 weeks. Record for each run:
+   - completion status (N13), number of rounds, elapsed time;
+   - whether the comment came after the merge (N5);
+   - the number of pushes and runs per PR (N3);
+   - the total number of bot comments per PR (N16);
+   - fix-through (N18);
+   - handling rate and rejection rate by category.
 
-   需要的最小代码改动只有 N11 那个 artifact。
+   The only minimal code change needed is the artifact of N11.
 
-### P1：便宜的杠杆
+### P1: cheap levers
 
-1. **PR 模板（流程改动）。** 加一个「Acceptance criteria」段，以及「我已遵守编码规范」勾选项（N9，取决于用户的回答）。
-   - 已有：`requirements.js` 的 `extractCriteria` 能识别 AC 标题。
-   - 要补：勾选项检查是一个确定性正则，结果写进摘要的 Standards 一节，标注为「作者声明」，和 lint 证据分开显示。
-2. **核实 C2 的假设。** 拿 `orpc-2098<-1705`、`<-1718`、`orpc-2057<-1721` 三个 case，看 R 所在的文件有没有被 `collect.sh` 丢掉。如果被丢了：同一个 PR 改动的非需求文档以「PR 自身声明」的身份进入上下文，只读不审（不产生文档类发现）。
-3. **防 N2。** 骨架的期望值必须出自 R 的原文；没有 R 时用占位符。评测增加一个对抗用例：agent 按评论补了镜像测试，SpecGuard 不应把它判成 `covered`。
-4. **控制 N3。** 先拿到 push 次数的数据，再从三个选项里选：只在 `ready_for_review` 时触发、只在打标签时触发、只审增量。
-5. **决定 N1。** 确认 agent PR 的作者类型之后，单独为它设一个开关。
+1. **PR template (a process change).** Add an "Acceptance criteria" section, and an "I have followed the coding standard" checkbox (N9, depending on the user's answer).
+   - Already there: `extractCriteria` in `requirements.js` can recognize AC headings.
+   - To add: the checkbox check is a deterministic regex, with the result written into the Standards section of the summary, labeled as "author declaration" and shown separately from lint evidence.
+2. **Verify the hypothesis of C2.** Take the three cases `orpc-2098<-1705`, `<-1718`, `orpc-2057<-1721`, and see whether the file R lives in was dropped by `collect.sh`. If dropped: non-requirement documents changed in the same PR enter the context under the identity of "the PR's own statements", read-only and not reviewed (producing no document-type findings).
+3. **Guard against N2.** The skeleton's expected values must come from the original text of R; use placeholders when there is no R. Add an adversarial case to the evaluation: an agent adds a mirror test per the comment, and SpecGuard should not judge it as `covered`.
+4. **Control N3.** First get the data on the number of pushes, then choose among three options: trigger only at `ready_for_review`, trigger only when a label is applied, or review only the increment.
+5. **Decide N1.** After confirming the author type of agent PRs, set up a separate switch for them.
 
-### P2：等 pilot 有数据再做
+### P2: do after the pilot has data
 
-- WP7 变异基准、WP8 SZZ 回放：在 P0-1 分类表明需求不符占比够高之后再做。SZZ 的样本应来自缺陷系统（N17）。
-- N11 的聚合视图做成离线脚本就够了，不做 dashboard。
-- 原生 CCR 去重、阻断模式：按 `design.md` §11 原有的触发条件。
+- WP7 mutation benchmark, WP8 SZZ replay: do them only after the classification in P0-1 shows that the share of requirement mismatch is high enough. SZZ samples should come from the defect system (N17).
+- The aggregate view of N11 as an offline script is enough, with no dashboard.
+- Native CCR deduplication, blocking mode: follow the original trigger conditions in `design.md` §11.
 
-### 不要做（直到对应门槛被数据触发）
+### Do not do (until the corresponding threshold is triggered by data)
 
-- 不加 embeddings、tree-sitter、co-change、索引缓存（`traceability-plan.md` §8 已把它们设为门槛触发的升级）。
-- 不新增追溯类的 finding kind，也不扩充 tr 种子用例。在 C2 的构造效度问题解决之前，再多的种子用例也证明不了真实价值。
-- 不拿 Sonnet judge 的结果对外宣称精度（C7）。
+- Do not add embeddings, tree-sitter, co-change, or index caches (`traceability-plan.md` §8 already made them threshold-triggered upgrades).
+- Do not add new traceability finding kinds, and do not extend the tr seeded cases. Until the construct validity problem of C2 is solved, even more seeded cases cannot prove real value.
+- Do not announce precision externally based on the results of the Sonnet judge (C7).
 
-## 7. 需要用户回答的问题
+## 7. Questions for the user to answer
 
-按影响从大到小排列；每题附上答案会改变什么。
+Ordered from largest to smallest impact; each lists what the answer would change.
 
-| # | 问题 | 答案会改变什么 |
+| # | Question | What the answer changes |
 |---|---|---|
-| Q1 | **请重新粘贴被截断的约束列表（Pasted text #7）。**「Git…」指的是 GitHub Issues、Wiki，还是 Git 历史？后面还有第 3 条吗？ | §4.2 的排序、N8 |
-| Q2 | 你们的 R 主要写在哪里：PR 正文、GitHub Issues、仓库里的 spec，还是 Jira、ADO、Confluence？团队有没有采用 SDD（Kiro、Spec Kit、OpenSpec）？ | 追溯是核心能力还是 opt-in；`trace` 的默认值（P0-2） |
-| Q3 | 「coding standard has been confirmed」指哪一种：(a) 作者在 PR 模板里勾选了确认；(b) lint 和 format 工具通过了；(c) AI 按规范审查了 diff？可以多选 | N9 是否要做；README 的表述 |
-| Q4 | 「review requirements」是否包括审查需求本身是否可测试、有没有歧义？ | N10 和 U10 是否进入范围 |
-| Q5 | QA 在你们流水线里的位置：测合并后的 staging，还是测每个 PR 的 preview 环境？你作为 QE，希望从工具拿到什么：只要给开发者的评论，还是也要给 QA 的风险清单和趋势？ | ΔC 是否成立（C5、N6）；N11 和 §4.3 是否进入范围 |
-| Q6 | 能不能提供最近 50 个 QA 或生产缺陷做分类？能不能在一个真实仓库上跑 pilot？ | P0-1、P0-3 能否执行 |
-| Q7 | 团队有没有用 coding agent 开 PR？这些 PR 是否要审？ | N1、N2 |
-| Q8 | 公司政策是否允许把代码发给 Copilot 或 Anthropic？ | N15，是否能采用 |
+| Q1 | **Please paste the truncated constraint list again (Pasted text #7).** Does "Git…" mean GitHub Issues, the Wiki, or Git history? Is there a constraint 3 after it? | The ordering of §4.2, N8 |
+| Q2 | Where is your R mainly written: the PR body, GitHub Issues, specs in the repository, or Jira, ADO, Confluence? Has the team adopted SDD (Kiro, Spec Kit, OpenSpec)? | Whether traceability is a core capability or opt-in; the default of `trace` (P0-2) |
+| Q3 | Which does "coding standard has been confirmed" mean: (a) the author ticked a confirmation in the PR template; (b) the lint and format tools passed; (c) the AI reviewed the diff against the standard? Multiple choices are allowed | Whether to do N9; the README wording |
+| Q4 | Does "review requirements" include reviewing whether the requirement itself is testable and unambiguous? | Whether N10 and U10 enter scope |
+| Q5 | Where QA sits in your pipeline: testing the post-merge staging, or testing each PR's preview environment? As QE, what do you want from the tool: only comments for developers, or also a risk list and trends for QA? | Whether ΔC holds (C5, N6); whether N11 and §4.3 enter scope |
+| Q6 | Can you provide the most recent 50 QA or production defects for classification? Can a pilot be run on a real repository? | Whether P0-1 and P0-3 can be executed |
+| Q7 | Does the team use a coding agent to open PRs? Should those PRs be reviewed? | N1, N2 |
+| Q8 | Does company policy allow sending code to Copilot or Anthropic? | N15, whether it can be adopted |
 
-## 8. 给接手 session 的任务清单
+## 8. Task list for the successor session
 
-| # | 任务 | 前置 | 验收 |
+| # | Task | Prerequisite | Acceptance |
 |---|---|---|---|
-| H1 | 把 §7 的 Q1–Q8 交给用户，答案写回本文 §7 | 无 | 每题有答案或「未知」，并注明日期 |
-| H2 | 按 P0-1 写分类表格（CSV 模板加填写说明）交给用户 | 无 | 用户能直接填 |
-| H3 | 核实 C2：三个 orpc case 中 R 所在的文件，以及 `collect.sh` 是否丢弃了它 | 无 | 写出结论：丢了或没丢，并给出文件路径 |
-| H4 | 核实 N1：Copilot coding agent 开的 PR，其 `user.type` 和 `login` 是什么 | 需要样例 PR | 给出 API 返回值 |
-| H5 | 根据 Q2 的答案，写一份 `trace` 默认值变更的规格；实现交给 Sonnet | Q2 | 规格里写清触发条件和 `spec_mismatch` 的出口（inline 还是摘要） |
-| H6 | 写 N11 加 N18 的最小 artifact 规格：每次运行一个 JSON，包含 findings、fingerprint、完成状态、轮数、耗时、合并时间 | 无 | 规格交给 Sonnet；聚合脚本有一个 `node:test` |
-| H7 | 根据 Q3，写 PR 模板和勾选项检查的规格 | Q3 | 勾选项结果在摘要里与 lint 证据分开显示 |
-| H8 | 根据 Q5 和 Q6，制定 pilot 计划（仓库、时长、记录字段） | Q5、Q6 | 和 P0-3 的字段一一对应 |
+| H1 | Give Q1–Q8 of §7 to the user, and write the answers back into §7 of this document | None | Every question has an answer or "unknown", with the date noted |
+| H2 | Write the classification table of P0-1 (a CSV template plus filling instructions) and give it to the user | None | The user can fill it in directly |
+| H3 | Verify C2: the file R lives in for the three orpc cases, and whether `collect.sh` discarded it | None | Write the conclusion: dropped or not, with the file path |
+| H4 | Verify N1: for a PR opened by the Copilot coding agent, what are its `user.type` and `login` | Needs a sample PR | Give the API return values |
+| H5 | Based on the answer to Q2, write a spec for changing the default of `trace`; implementation goes to Sonnet | Q2 | The spec states the trigger conditions and the exit for `spec_mismatch` (inline or summary) |
+| H6 | Write the minimal artifact spec for N11 plus N18: one JSON per run, containing findings, fingerprint, completion status, number of rounds, elapsed time, merge time | None | The spec goes to Sonnet; the aggregation script has one `node:test` |
+| H7 | Based on Q3, write the spec for the PR template and the checkbox check | Q3 | The checkbox result is shown in the summary separately from the lint evidence |
+| H8 | Based on Q5 and Q6, draw up the pilot plan (repository, duration, recorded fields) | Q5, Q6 | One-to-one with the fields of P0-3 |
 
-## 9. 已核实与未核实
+## 9. Verified and not verified
 
-**本 session 核实过（读了代码或数据）：**
-- 原始目标原文：`docs/design.md:38-47`。
-- `trace` 的默认值是 `auto`：`action.yml:20`。
-- preflight 跳过 Bot 作者：`src/preflight.js:15`。
-- 触发器包含 `synchronize`，仓库里没有增量审查的代码。
-- tr live eval 未跑：`docs/design.md:432`。
-- head-to-head 的数字和「追溯贡献 0 个 direct hit」：`docs/competitors/head-to-head.md`。
-- holdout 池的分布：69 对，其中 confirmed 且 in-scope 的 13 对为 logic 8、validation 3、requirement_mismatch 2，这 2 对都是 orpc-2098，`scope_reason` 为「Code disagrees with the PR's own documented merge rule」。来源：`eval/replay/holdout-pairs.json`。
-- field study 修复后的数字无法从已提交的 harness 复现：`docs/field-study.md` §7。
+**Verified in this session (code or data was read):**
+- The original goal text: `docs/design.md:38-47`.
+- The default of `trace` is `auto`: `action.yml:20`.
+- preflight skips Bot authors: `src/preflight.js:15`.
+- The triggers include `synchronize`, and the repository has no incremental-review code.
+- tr live eval not run: `docs/design.md:432`.
+- The head-to-head numbers and "traceability contributed 0 direct hits": `docs/competitors/head-to-head.md`.
+- Distribution of the holdout pool: 69 pairs, of which the 13 pairs that are confirmed and in-scope are logic 8, validation 3, requirement_mismatch 2; both of these 2 pairs are orpc-2098, with `scope_reason` "Code disagrees with the PR's own documented merge rule". Source: `eval/replay/holdout-pairs.json`.
+- The field study's post-fix numbers cannot be reproduced from the committed harness: `docs/field-study.md` §7.
 
-**未核实，引用前要回到原处核对：**
-- Copilot coding agent 的 PR 作者类型（N1）。
-- 每个 PR 平均 push 几次（N3）。
-- C2 中 R 是否被 collector 丢弃（H3）。
-- 外部研究数字：沿用 `goal-first-principles.md` §3 中已标注「未核实」的那些。
+**Not verified; go back to the source and check before citing:**
+- The author type of Copilot coding agent PRs (N1).
+- Average number of pushes per PR (N3).
+- Whether R in C2 was dropped by the collector (H3).
+- External research numbers: following those already marked "not verified" in `goal-first-principles.md` §3.

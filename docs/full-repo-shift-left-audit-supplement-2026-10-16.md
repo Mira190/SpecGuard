@@ -1,165 +1,165 @@
-# 全仓 shift-left audit 补充：覆盖记录与 27 项已复现缺陷（另 1 项按设计）
+# Full-repo shift-left audit supplement: coverage record and 27 reproduced defects (plus 1 by design)
 
-What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库规则联系起来，提示缺失或薄弱的单元测试，也提供全仓轮转扫描。本文补充 [主报告](full-repo-shift-left-audit-2026-10-16.md)，不重复其 F19–F29。
+What this repo does: At the PR stage SpecGuard links requirements, code, tests and repo rules, flags missing or weak unit tests, and also provides a rotating full-repo scan. This document supplements the [main report](full-repo-shift-left-audit-2026-10-16.md) and does not repeat its F19–F29.
 
-## 1. 标题与范围
+## 1. Title and scope
 
-日期：2026-10-16。基线：`origin/main` `ee1c15812bae4315f39ce7d5bf1bf7511ac58553`。性质：只提交报告，不修改产品代码。
+Date: 2026-10-16. Baseline: `origin/main` `ee1c15812bae4315f39ce7d5bf1bf7511ac58553`. Nature: the report is committed only; no product code is changed.
 
-**目的：** 补齐主报告 §2 未覆盖或未深读的文件，使全仓审计完整。§2 是逐文件的覆盖记录，§3 是补读得到的 27 项缺陷加 1 项按设计（探针编号 S1–S14、U1–U13、V1–V2；U13 是单行验证）。
+**Purpose:** fill in the files that §2 of the main report did not cover or did not read in depth, so that the full-repo audit is complete. §2 is a file-by-file coverage record, and §3 holds the 27 defects found by the additional reading plus 1 by design (probe IDs S1–S14, U1–U13, V1–V2; U13 is a one-line verification).
 
-**证据标准：** 每一项都由探针复现，探针断言的是 **当前行为**。没有调用真实模型，没有访问真实 GitHub（GitHub 与 `gh` 用本地 mock；`collect.sh` 在临时 git 仓库里真实执行）。探针通过只证明错误行为存在，**不是**产品测试通过，也**不是**修复通过。所有数字取自附录 A、B 的 JSON 结果（S 系列在附录 A，U 系列在附录 B）。U13 是事实核查时补的 `node -e` 单行验证，不在探针脚本里，输出见 §3.1。
+**Evidence standard:** every item is reproduced by a probe, and the probe asserts the **current behaviour**. No real model was called and no real GitHub was accessed (GitHub and `gh` are local mocks; `collect.sh` really ran in a temporary git repo). A probe passing only proves that the wrong behaviour exists; it is **not** a product test passing and **not** a fix passing. All numbers come from the JSON results in appendices A and B (the S series in appendix A, the U series in appendix B). U13 is a `node -e` one-line verification added during fact checking; it is not in the probe scripts, and its output is in §3.1.
 
-**限制：** Windows，Node `v26.11.1`；`collect.sh` 探针把 Git for Windows 的 `bin`、`usr/bin` 放在 PATH 前面。S12 的 "pinned action ref" 事实依赖本机 clone 含该提交。没有重跑 Ubuntu/Node 22 全套 CI。S6 探针未经 `audit-post` 入口；S7 的故障是人为注入的。
+**Limitations:** Windows, Node `v26.11.1`; the `collect.sh` probes put Git for Windows' `bin` and `usr/bin` in front of PATH. The "pinned action ref" fact in S12 depends on the local clone containing that commit. The full Ubuntu/Node 22 CI was not rerun. The S6 probe did not go through the `audit-post` entry point; the fault in S7 was injected by hand.
 
-## 2. 覆盖记录
+## 2. Coverage record
 
-范围：`origin/main` 中全部非测试、非 fixture 的源码、workflow 和 skill 文件（`git ls-tree -r --name-only origin/main`）。标记：**主报告已审** = 主报告 §2 表中列为已读的关键链路；**本补充全读** = 本次通读全文；**本补充部分读** = 只读与探针相关的段落；**未读** = 本次和主报告均未读。
+Scope: all non-test, non-fixture source, workflow and skill files in `origin/main` (`git ls-tree -r --name-only origin/main`). Markers: **reviewed in the main report** = a key path listed as read in the §2 table of the main report; **read in full in this supplement** = read through in full this time; **partly read in this supplement** = only the passages relevant to the probes were read; **not read** = read neither this time nor in the main report.
 
-| 文件 | 状态 |
+| File | Status |
 |---|---|
-| `src/post.js`、`src/audit-post.js`、`src/audit-collect.js`、`src/audit-units.js`、`src/scan-parts.js`、`src/prompt.js`、`src/preflight.js`、`src/requirements.js`、`src/trace.js`、`src/test-map.js`、`src/engines/claude-api.js` | 主报告已审 |
-| `src/audit.schema.json`、`src/findings.schema.json` | 主报告已审 |
-| `action.yml`、`package.json`、`README.md`、`.github/workflows/ci.yml`、`.github/workflows/specguard-run.yml` | 主报告已审 |
-| `eval/grade.js`、`eval/weekly-report.js` | 主报告已审 |
-| `src/collect.sh`、`src/coverage.js`、`src/leads.js`、`bin/specguard-local.js`、`eval/label-export.js` | 主报告已审；本补充全读 |
-| `src/engines/claude.sh`、`src/engines/copilot.sh`、`src/engines/claude-result.js`、`src/engines/_redact.sh`、`src/engines/README.md` | 本补充全读 |
-| `src/focus.js`、`src/resolve-inputs.js`、`src/extract-json.js`、`src/credential.js`、`src/engine-model.js`、`src/standards-map.js`、`src/checks.js`、`src/superseded.js`、`src/target.js`、`src/fail-on-error.js`、`src/limitations.js`、`src/numdiff.js`、`src/version.js`、`src/visibility-guard.js`、`src/tee-summary.js`、`src/validate-inputs.sh` | 本补充全读 |
-| `eval/run.js`、`eval/local.js`、`eval/field.js`、`eval/ab.js`、`eval/degrade.js`、`eval/mutate.js`、`eval/bundle.js`、`eval/szz.js`、`eval/prove.js`、`eval/replay.js`、`eval/mirror-workflow.yml` | 本补充全读 |
-| `bin/pin-reusable.js`、`.github/workflows/specguard.yml` | 本补充全读 |
-| `.github/instructions/specguard.instructions.md` | 本补充全读 |
-| `skills/test-review/SKILL.md`、`skills/test-review/references/*`、`skills/spec-audit/SKILL.md` | 本补充全读 |
-| `.github/skills/test-review/**`、`.github/instructions/test-review.instructions.md`、`ccr/test-review.instructions.md` | 本补充全读（与 `skills/test-review/**` 同内容的拷贝，见下） |
-| `eval/aggregate-counts.js`、`eval/signal.js`、`eval/assign.js` | 本补充部分读 |
-| `eval/token/anatomy.js`、`.claude/skills/ste-mini/SKILL.md` | 未读 |
+| `src/post.js`, `src/audit-post.js`, `src/audit-collect.js`, `src/audit-units.js`, `src/scan-parts.js`, `src/prompt.js`, `src/preflight.js`, `src/requirements.js`, `src/trace.js`, `src/test-map.js`, `src/engines/claude-api.js` | Reviewed in the main report |
+| `src/audit.schema.json`, `src/findings.schema.json` | Reviewed in the main report |
+| `action.yml`, `package.json`, `README.md`, `.github/workflows/ci.yml`, `.github/workflows/specguard-run.yml` | Reviewed in the main report |
+| `eval/grade.js`, `eval/weekly-report.js` | Reviewed in the main report |
+| `src/collect.sh`, `src/coverage.js`, `src/leads.js`, `bin/specguard-local.js`, `eval/label-export.js` | Reviewed in the main report; read in full in this supplement |
+| `src/engines/claude.sh`, `src/engines/copilot.sh`, `src/engines/claude-result.js`, `src/engines/_redact.sh`, `src/engines/README.md` | Read in full in this supplement |
+| `src/focus.js`, `src/resolve-inputs.js`, `src/extract-json.js`, `src/credential.js`, `src/engine-model.js`, `src/standards-map.js`, `src/checks.js`, `src/superseded.js`, `src/target.js`, `src/fail-on-error.js`, `src/limitations.js`, `src/numdiff.js`, `src/version.js`, `src/visibility-guard.js`, `src/tee-summary.js`, `src/validate-inputs.sh` | Read in full in this supplement |
+| `eval/run.js`, `eval/local.js`, `eval/field.js`, `eval/ab.js`, `eval/degrade.js`, `eval/mutate.js`, `eval/bundle.js`, `eval/szz.js`, `eval/prove.js`, `eval/replay.js`, `eval/mirror-workflow.yml` | Read in full in this supplement |
+| `bin/pin-reusable.js`, `.github/workflows/specguard.yml` | Read in full in this supplement |
+| `.github/instructions/specguard.instructions.md` | Read in full in this supplement |
+| `skills/test-review/SKILL.md`, `skills/test-review/references/*`, `skills/spec-audit/SKILL.md` | Read in full in this supplement |
+| `.github/skills/test-review/**`, `.github/instructions/test-review.instructions.md`, `ccr/test-review.instructions.md` | Read in full in this supplement (a copy with the same content as `skills/test-review/**`, see below) |
+| `eval/aggregate-counts.js`, `eval/signal.js`, `eval/assign.js` | Partly read in this supplement |
+| `eval/token/anatomy.js`, `.claude/skills/ste-mini/SKILL.md` | Not read |
 
-三个原本"未读"的文件已读完，按同一标准（探针或静态引文能证明才列）检查：
+Three files that were originally "not read" have now been read, and checked against the same standard (listed only if a probe or a static quotation can prove it):
 
-- `.github/instructions/specguard.instructions.md`（仓库自己的编码标准，`applyTo: "src/**,eval/*.js"`）：其第 8 行要求"每个导出函数都需要断言返回值或抛错的单元测试"，仓库自身不满足，见 V1。其余规则（Node 22、无依赖、`node:test`、测试命名、不抛字符串）：`throw '...'` 只出现在 `eval/cases/s1`、`s2` 的故意用例里，源码无此情况。
-- `eval/replay.js`：回放只数 summary items 和 inline 评论（`countFindings`），不做 TP/FP 评分，所以不受 S10/F29 的重复计数影响。发现一项：`findings_present=false` 的 PR 打印成全 0 行，见 V2。
-- `src/engines/README.md`：逐条对照代码，`MODEL` 空 → `claude-haiku-5-5`（`claude-api.js:281`）、`CONTEXT_PACK_BYTES` 默认 250000（`:285`）、单文件 48 KiB 与 2 MiB（`:64`）、别名映射（`credential.js:10`）均一致；"`engine-status` 缺省即 success"（README:37）与 "An engine note says how many files went in and which did not fit"（README:61）为 S7 提供旁证：打包失败时没有这类 note（S7 的 `engine.notes` 只有价格估算一条）。已读，无新发现。
+- `.github/instructions/specguard.instructions.md` (the repo's own coding standard, `applyTo: "src/**,eval/*.js"`): its line 8 requires "every exported function needs a unit test that asserts the return value or the thrown error", which the repo itself does not satisfy, see V1. The other rules (Node 22, no dependencies, `node:test`, test naming, do not throw strings): `throw '...'` appears only in the deliberate cases `eval/cases/s1` and `s2`; there is none in the source.
+- `eval/replay.js`: replay only counts summary items and inline comments (`countFindings`) and does no TP/FP scoring, so it is not affected by the double counting of S10/F29. One item found: a PR with `findings_present=false` is printed as an all-zero row, see V2.
+- `src/engines/README.md`: checked line by line against the code; `MODEL` empty → `claude-haiku-5-5` (`claude-api.js:281`), `CONTEXT_PACK_BYTES` default 250000 (`:285`), per-file 48 KiB and 2 MiB (`:64`), and the alias mapping (`credential.js:10`) are all consistent; "`engine-status` defaults to success when absent" (README:37) and "An engine note says how many files went in and which did not fit" (README:61) give corroborating evidence for S7: when packing fails there is no such note (the `engine.notes` of S7 has only the price estimate). Read; no new findings.
 
-**覆盖核对（脚本）：** `coverage-check.cjs`（附录 C）取 `git ls-tree -r --name-only origin/main`，减去下列不在范围的模式，再与本表中出现的路径和通配符做差集：
+**Coverage check (script):** `coverage-check.cjs` (appendix C) takes `git ls-tree -r --name-only origin/main`, subtracts the out-of-scope patterns below, and then computes the set difference against the paths and wildcards that appear in this table:
 
-| 不在范围的模式 | 原因 |
+| Out-of-scope pattern | Reason |
 |---|---|
-| `**/*.test.js`、`test/**`、`tests/**`、`**/fixtures/**` | 任务明确排除测试与 fixture |
-| `eval/cases/**`、`eval/replay/*.json` | 评估输入数据，不是被执行的代码 |
-| `eval/results/**` | 历史运行产物 |
-| `docs/**` | 历史研究与评审文档，不被产品加载 |
-| `research/**` | 外部调研材料，不被产品加载 |
-| `eval/**/README.md` | 评估说明文档，无运行行为 |
-| `NOTICE` | 许可声明，无运行行为 |
-| `.gitattributes`、`.gitignore` | 仓库元数据（换行、忽略规则），不影响被审查行为 |
+| `**/*.test.js`, `test/**`, `tests/**`, `**/fixtures/**` | The task explicitly excludes tests and fixtures |
+| `eval/cases/**`, `eval/replay/*.json` | Evaluation input data, not executed code |
+| `eval/results/**` | Artifacts of historical runs |
+| `docs/**` | Historical research and review documents, not loaded by the product |
+| `research/**` | External research material, not loaded by the product |
+| `eval/**/README.md` | Evaluation documentation, no runtime behaviour |
+| `NOTICE` | License notice, no runtime behaviour |
+| `.gitattributes`, `.gitignore` | Repo metadata (line endings, ignore rules), does not affect the reviewed behaviour |
 
-计数：`git ls-tree` 共 543 个路径；不在范围 459；范围内 84；表中已列 84；差集 0（空）。表中通配符 71 个，未匹配到任何路径的 0 个，匹配到范围外路径的 0 个。
+Counts: `git ls-tree` gives 543 paths in total; out of scope 459; in scope 84; listed in the table 84; set difference 0 (empty). The table has 71 wildcards, 0 of which matched no path and 0 of which matched a path outside the scope.
 
-重复拷贝：`.github/skills/test-review/` 与 `skills/test-review/` 整目录逐字节相同（`diff -rq` 无输出），所以 skill 的发现只计一次。`ccr/test-review.instructions.md` 与 `.github/instructions/test-review.instructions.md` 忽略换行符后内容一致（工作区检出的换行符不同，哈希因此不同）。
+Duplicate copies: the whole directory `.github/skills/test-review/` is byte-for-byte identical to `skills/test-review/` (`diff -rq` prints nothing), so findings in the skill are counted only once. `ccr/test-review.instructions.md` and `.github/instructions/test-review.instructions.md` have the same content once line endings are ignored (the line endings of the working-tree checkouts differ, so the hashes differ).
 
-## 3. 发现
+## 3. Findings
 
-27 项缺陷 + 1 项按设计：P1 PR 模式 10 项、P1 scan 模式 4 项、P2 5 项、P3 8 项（eval 指标 7 项、仓库自身标准 1 项）；另有 S11 按设计，不计为缺陷。行号均指 `ee1c158`。"影响模式"：PR（shift-left 主路径）、scan（全仓轮转）、local（`specguard-local`）、eval（评估工具）。
+27 defects + 1 by design: P1 PR mode 10 items, P1 scan mode 4 items, P2 5 items, P3 8 items (eval metrics 7 items, the repo's own standard 1 item); in addition S11 is by design and is not counted as a defect. Line numbers all refer to `ee1c158`. "Affected mode": PR (the main shift-left path), scan (full-repo rotation), local (`specguard-local`), eval (evaluation tooling).
 
-### 3.1 P1：PR 模式
+### 3.1 P1: PR mode
 
-#### U1 [P1] 缺少 merge-base 时被当作 "Nothing to review"，仍写 complete 与 head marker
+#### U1 [P1] A missing merge-base is treated as "Nothing to review", and a complete status and head marker are still written
 
-- **位置：** `src/collect.sh:69–70`（只告警）、`:87`（`done < <(git diff ...)` 的失败无人检查）、`:115`（`nothing reviewable in diff` → `skip true`）。**影响模式：** PR。
-- **What this is:** `BASE_SHA` 不在 clone 里（浅克隆）时，三点 diff 失败。
-- **Problem:** 失败被当作空 diff：`skip=true`，post.js 发布 "Nothing to review" 并写 head marker，之后同 head 的 preflight 会跳过。
-- **Fix:** diff 命令失败时 collect 非零退出或产出 incomplete；不要把"取不到 diff"当作"没有变更"。
-- **If we skip it:** 没有 `fetch-depth: 0` 的采用者得到"无需审查"的放心信号，真正的 PR 完全没被看。
-- **证据 U1：** `baseInClone=false`、`collectExit=0`、`collectOutputs=["skip=false","partial=false","skip=true"]`、`diffPatchBytes=0`、`postStatus="complete"`、`summaryHasNothingToReview=true`、`summaryHasHeadMarker=true`。警告只在 stdout：`::warning::no merge-base of BASE_SHA and HEAD_SHA (shallow clone? ...)`。
-- **回归测试应断言：** `BASE_SHA` 不在 clone 里时，collect 不输出 `skip=true`，post 不发布 "Nothing to review"、不写 head marker（预期非零退出或 `incomplete`）。
+- **Location:** `src/collect.sh:69–70` (warning only), `:87` (`done < <(git diff ...)` failure is checked by no one), `:115` (`nothing reviewable in diff` → `skip true`). **Affected mode:** PR.
+- **What this is:** `BASE_SHA` is not in the clone (shallow clone), the three-dot diff fails.
+- **Problem:** The failure is treated as an empty diff: `skip=true`, post.js publishes "Nothing to review" and writes the head marker, and afterwards preflight skips the same head.
+- **Fix:** When the diff command fails, collect should exit non-zero or produce incomplete; do not treat "could not get the diff" as "no changes".
+- **If we skip it:** Adopters without `fetch-depth: 0` get a reassuring "nothing to review" signal, and the real PR is not looked at at all.
+- **Evidence U1:** `baseInClone=false`, `collectExit=0`, `collectOutputs=["skip=false","partial=false","skip=true"]`, `diffPatchBytes=0`, `postStatus="complete"`, `summaryHasNothingToReview=true`, `summaryHasHeadMarker=true`. The warning is only on stdout: `::warning::no merge-base of BASE_SHA and HEAD_SHA (shallow clone? ...)`.
+- **The regression test should assert:** `BASE_SHA` is not in the clone, collect does not output `skip=true`, and post does not publish "Nothing to review" or write the head marker (expected: non-zero exit or `incomplete`).
 
-#### S2 [P1] 读不到的 closing issue：状态仍是 complete 并被缓存
+#### S2 [P1] An unreadable closing issue: the status is still complete and gets cached
 
-- **位置：** `src/requirements.js:285`（`fact(...)`）、`src/limitations.js:4`（`FACT_LIMITATION` 含 `Could not read (?:issue|history issue) `）、`src/post.js:1528`。**影响模式：** PR。
-- **What this is:** 读不到的引用被分类为 fact（只是注记），而不是 gap（使运行 incomplete）。
-- **Problem:** PR 声明 `Fixes #7`，该 issue 读取失败（HTTP 403）。需求状态 `partial`，但运行 `status=complete`、`execution_complete=true`，写 head marker，下次 push 被 preflight 跳过。标题已措辞为 "❔ No gaps found; part of the review could not be assessed"，不是 "No unit test gaps found"，所以问题不在文案，在状态与缓存。对照：issue 数超过五个上限时，同类缺失被判 `incomplete`，不写 marker。
-- **Fix:** 让"没读到声明过的 closing issue"进入 gap（或至少不写 head marker），与超上限的处理一致；权限或临时 API 错误应让下一次 push 重试。
-- **If we skip it:** 一次 403 或 API 抖动，就把该 head 的需求侧审查永久缓存为完成。
-- **证据 S2：** `unreadableClosing.status="partial"`、`limitations[0]={l:"Could not read issue #7.",fact:true}`、`run.status="complete"`、`complete=true`、`execution_complete=true`、`headline="❔ No gaps found; part of the review could not be assessed"`、`headMarker=true`、`nextPushSkipped=true`；对照 `cappedClosing.run.status="incomplete"`、`headMarker=false`。
-- **回归测试应断言：** 读不到 closing issue 时 `status` 为 `incomplete`、无 head marker，`nextPushSkipped` 为 `false`。
+- **Location:** `src/requirements.js:285` (`fact(...)`), `src/limitations.js:4` (`FACT_LIMITATION` contains `Could not read (?:issue|history issue) `), `src/post.js:1528`. **Affected mode:** PR.
+- **What this is:** An unreadable reference is classified as a fact (only a note) instead of a gap (which makes the run incomplete).
+- **Problem:** The PR declares `Fixes #7`, and reading that issue fails (HTTP 403). The requirement status is `partial`, but the run has `status=complete` and `execution_complete=true`, writes the head marker, and the next push is skipped by preflight. The headline is already worded as "❔ No gaps found; part of the review could not be assessed", not "No unit test gaps found", so the problem is not the wording but the status and the cache. For comparison: when the number of issues exceeds the cap of five, the same kind of omission is judged `incomplete` and no marker is written.
+- **Fix:** Make "a declared closing issue could not be read" a gap (or at least do not write the head marker), consistent with the over-cap handling; a permission or transient API error should let the next push retry.
+- **If we skip it:** A single 403 or API hiccup caches the requirement-side review of that head as complete permanently.
+- **Evidence S2:** `unreadableClosing.status="partial"`, `limitations[0]={l:"Could not read issue #7.",fact:true}`, `run.status="complete"`, `complete=true`, `execution_complete=true`, `headline="❔ No gaps found; part of the review could not be assessed"`, `headMarker=true`, `nextPushSkipped=true`; for comparison `cappedClosing.run.status="incomplete"`, `headMarker=false`.
+- **The regression test should assert:** when a closing issue cannot be read, `status` is `incomplete`, there is no head marker, and `nextPushSkipped` is `false`.
 
-#### U5 [P1] 同 subject 的别处断言隐藏已删除或被弱化的断言
+#### U5 [P1] An assertion elsewhere with the same subject hides a deleted or weakened assertion
 
-- **位置：** `src/leads.js:263–265`（`same = add.filter(a => a.x === r.x)` 取整个文件的新增断言；`same.some(a => !a.weak)` 即视为 "still pinned"）。**影响模式：** PR。
-- **What this is:** `assertionDelta` 用 subject 判断被删除的断言是否被重新钉住。
-- **Problem:** `add` 汇集整个测试文件的新增断言，不限 hunk 或 test 块。文件另一处新增 `expect(result).toBe(true)`，subject 恰好是 `result`，就让 `result` 上被删的 `toEqual({a:1,b:2})` 不报。`expect(total(2)).toBe(5)` 改成 `expect(total(2)).toBeGreaterThan(0)` 同样被抑制：同 subject 的非弱新断言被算作仍然钉住，不比较强度（从 :265 的逻辑推断，未单独探针；探针只证明结果为空）。
-- **Fix:** "已重新钉住"限制在同一 hunk 或同一 test 块内；同 subject 的更弱断言仍报 `weakened`。
-- **If we skip it:** 这条 lead 的目的就是提示测试被削弱，抑制发生在最该提示的时候。
-- **证据 U5：** `removedOnly=[{kind:"removed",line:12,old:"expect(result).toEqual({a:1,b:2});"}]`；加入无关 hunk C 后 `withC=[]`；`weakA` 有一条 `weakened`，`weakAC=[]`；`toBe5ToGreaterThan=[]`、`toBe5Suppressed=true`；对照不同 subject：`controlOtherSubject` 仍报 `removed`。注：PR #197（断言删除后提升低置信度）作用在 lead 之后，不改变 lead 是否产生。
-- **回归测试应断言：** 加入无关 hunk C 后 `assertionDelta` 仍返回 `removed`（`withC.length===1`、`weakAC.length===1`）；`toBe(5)` → `toBeGreaterThan(0)` 返回 `weakened`。
+- **Location:** `src/leads.js:263–265` (`same = add.filter(a => a.x === r.x)` takes the new assertions of the whole file; `same.some(a => !a.weak)` is taken to mean "still pinned"). **Affected mode:** PR.
+- **What this is:** `assertionDelta` uses the subject to decide whether a deleted assertion has been pinned again.
+- **Problem:** `add` collects the new assertions of the whole test file, not limited to a hunk or a test block. If another place in the file adds `expect(result).toBe(true)` and its subject happens to be `result`, the deleted `toEqual({a:1,b:2})` on `result` is not reported. Changing `expect(total(2)).toBe(5)` to `expect(total(2)).toBeGreaterThan(0)` is suppressed in the same way: a non-weak new assertion with the same subject is counted as still pinning, and strength is not compared (inferred from the logic at :265, not probed separately; the probe only proves the result is empty).
+- **Fix:** Limit "pinned again" to the same hunk or the same test block; a weaker assertion with the same subject should still be reported as `weakened`.
+- **If we skip it:** The purpose of this lead is exactly to flag weakened tests, and the suppression happens at the moment it should flag the most.
+- **Evidence U5:** `removedOnly=[{kind:"removed",line:12,old:"expect(result).toEqual({a:1,b:2});"}]`; after adding the unrelated hunk C, `withC=[]`; `weakA` has one `weakened`, `weakAC=[]`; `toBe5ToGreaterThan=[]`, `toBe5Suppressed=true`; for comparison, with a different subject `controlOtherSubject` still reports `removed`. Note: PR #197 (raise low confidence after an assertion is deleted) acts after the lead and does not change whether the lead is produced.
+- **The regression test should assert:** after adding the unrelated hunk C, `assertionDelta` still returns `removed` (`withC.length===1`, `weakAC.length===1`); `toBe(5)` → `toBeGreaterThan(0)` returns `weakened`.
 
-#### U6 [P1] 删除整个测试文件不产生 lead
+#### U6 [P1] Deleting a whole test file produces no lead
 
-- **位置：** `src/leads.js:214`（`+++ /dev/null` → `file = null`）。**影响模式：** PR。
-- **What this is:** `assertionDelta` 把 `+++ /dev/null` 当作"没有文件"。
-- **Problem:** 同一条断言从保留的文件里删掉会报 `removed`；整个文件被删除却无输出。
-- **Fix:** 对 `deleted file` 的旧侧断言同样产出 `removed` lead。
-- **If we skip it:** 弱化测试最省事的方式（删文件）被排除在检查之外。
-- **证据 U6：** `deletedFile=[]`，`sameAssertionRemovedFromLiveFile=["removed"]`。
-- **回归测试应断言：** 删除整个测试文件时 `assertionDelta` 至少返回一条 `removed`（`deletedFile.length>=1`）。
+- **Location:** `src/leads.js:214` (`+++ /dev/null` → `file = null`). **Affected mode:** PR.
+- **What this is:** `assertionDelta` treats `+++ /dev/null` as "no file".
+- **Problem:** Deleting the same assertion from a retained file reports `removed`; deleting the whole file produces no output.
+- **Fix:** Produce a `removed` lead for the old-side assertions of a `deleted file` as well.
+- **If we skip it:** The easiest way to weaken tests (deleting the file) is left out of the check.
+- **Evidence U6:** `deletedFile=[]`, `sameAssertionRemovedFromLiveFile=["removed"]`.
+- **The regression test should assert:** when a whole test file is deleted, `assertionDelta` returns at least one `removed` (`deletedFile.length>=1`).
 
-#### U3 [P1] 测试候选 60 文件上限与 focus 选择不一致
+#### U3 [P1] The 60-file cap on test candidates is inconsistent with focus selection
 
-- **位置：** `src/collect.sh:248`（`CAP = 16 * 1024`、`MAX_FILES = 60`）、`:269`（`(N more changed file(s) not listed)`）；`src/focus.js` 之后另行挑选文件。**影响模式：** PR。
-- **What this is:** 候选测试表只列前 60 个变更文件；focus 对大 PR 按风险重新排序。
-- **Problem:** 风险最高的文件排在 60 个之后时，它被 focus 选中、源码进了 pack，但测试不在 pack，`notWhole` 为空，`pack-cut.txt` 不存在，下游认为测试全部可见。
-- **Fix:** 候选表优先列 focus 选中的文件（或在 focus 之后生成候选）；至少把"被选中但没有候选"记入 `pack-cut.txt`。
-- **If we skip it:** 大 PR 里最该有测试证据的文件，恰好得到"没有测试"的输入。
-- **证据 U3：** `candidatesListZzz=false`、`candidatesTail="(2 more changed file(s) not listed)"`、`focusPicksZzz=true`、`packHasZzzSource=true`、`packHasZzzTest=false`、`packNotWhole=[]`、`packCutTxt=null`；对照 `control.packHasZzzTest=true`。
-- **回归测试应断言：** focus 选中的 `src/zzz.js` 的测试要么在 pack 中（`packHasZzzTest===true`），要么在 `pack-cut.txt`/`notWhole` 中被点名。
+- **Location:** `src/collect.sh:248` (`CAP = 16 * 1024`, `MAX_FILES = 60`), `:269` (`(N more changed file(s) not listed)`); `src/focus.js` picks files separately afterwards. **Affected mode:** PR.
+- **What this is:** The candidate test table lists only the first 60 changed files; for a large PR focus re-orders by risk.
+- **Problem:** When the highest-risk file is ranked after the first 60, it is chosen by focus and its source goes into the pack, but its tests are not in the pack, `notWhole` is empty, `pack-cut.txt` does not exist, and downstream believes all tests are visible.
+- **Fix:** Let the candidate table list the files chosen by focus first (or generate the candidates after focus); at the very least record "chosen but has no candidate" in `pack-cut.txt`.
+- **If we skip it:** In a large PR the file that most needs test evidence happens to get an input saying "no tests".
+- **Evidence U3:** `candidatesListZzz=false`, `candidatesTail="(2 more changed file(s) not listed)"`, `focusPicksZzz=true`, `packHasZzzSource=true`, `packHasZzzTest=false`, `packNotWhole=[]`, `packCutTxt=null`; for comparison `control.packHasZzzTest=true`.
+- **The regression test should assert:** the tests of `src/zzz.js`, chosen by focus, are either in the pack (`packHasZzzTest===true`) or named in `pack-cut.txt`/`notWhole`.
 
-#### S3 [P1] 共享的大测试文件只按第一个文件的符号切片，`notWhole` 为空
+#### S3 [P1] A shared large test file is sliced only by the symbols of the first file, and `notWhole` is empty
 
-- **位置：** `src/engines/claude-api.js:182–188`（`seen` 去重）、`:222`（`unitSymbols`）。**影响模式：** PR。
-- **What this is:** 同一测试文件被多个变更源码文件命中时只打包一次。
-- **Problem:** 66,992 字节的共享测试文件超过每文件上限 41,666，被切成"提到第一个文件符号的窗口"；第二个文件的断言不在 pack 中，`notWhole` 仍为空。
-- **Fix:** 按所有命中它的源码文件的符号并集切片；或第二次命中发现窗口不含其符号时记入 `notWhole`。
-- **If we skip it:** 第二个文件被报缺测试，而 `pack-cut.txt` 为空，post 保持高置信度。
-- **证据 S3：** `testFileBytes=66992`、`perFileCap=41666`、`aAssertionInPack=true`、`bAssertionInPack=false`、`notWhole=[]`、`testBlockCount=1`。
-- **回归测试应断言：** 两个源码文件的断言都在 pack 中（`bAssertionInPack===true`），或共享测试文件出现在 `notWhole`。
+- **Location:** `src/engines/claude-api.js:182–188` (`seen` de-duplication), `:222` (`unitSymbols`). **Affected mode:** PR.
+- **What this is:** When the same test file is hit by several changed source files it is packed only once.
+- **Problem:** A shared test file of 66,992 bytes exceeds the per-file cap of 41,666 and is cut into "windows that mention the first file's symbols"; the assertions of the second file are not in the pack, and `notWhole` is still empty.
+- **Fix:** Slice by the union of the symbols of all source files that hit it; or, when the second hit finds that the window does not contain its symbols, record it in `notWhole`.
+- **If we skip it:** The second file is reported as missing tests while `pack-cut.txt` is empty, so post keeps high confidence.
+- **Evidence S3:** `testFileBytes=66992`, `perFileCap=41666`, `aAssertionInPack=true`, `bAssertionInPack=false`, `notWhole=[]`, `testBlockCount=1`.
+- **The regression test should assert:** the assertions of both source files are in the pack (`bAssertionInPack===true`), or the shared test file appears in `notWhole`.
 
-#### S7 [P1] 被吞掉的 pack 错误被当作"全部可见"
+#### S7 [P1] A swallowed pack error is treated as "all visible"
 
-- **位置：** `src/engines/claude-api.js:416`（`catch { /* the pack is optional */ }`）、`src/scan-parts.js:26`（`catch { return { text: '', note: '', notWhole: [] } }`）。**影响模式：** PR、scan。
-- **What this is:** 打包失败被当作可选步骤。
-- **Problem:** (a) 单次调用路径：`contextPack` 抛错，没有 `pack-cut.txt`，`engine-status` 视为 success，findings 照常写出，post 保留高置信度；对照：`pack-cut.txt` 点名该测试时，同一 finding 降为低置信度。(b) scan 路径：`contextPack` 抛错时 unit pack 文本为空、`packCut=[]`。
-- **Fix:** 打包失败写入 `pack-cut.txt`（或失败状态），把所有文件视为未看全。
-- **If we skip it:** 打包故障把"模型什么也没看到"变成"没有裁剪"。
-- **证据 S7：** `engine.status="success (no engine-status file)"`、`packCutFile=false`、`findingsWritten=true`；`postNoPackCut.postedHighConfidence=1`、`lowConfidenceNote=false`；`postPackCutNamesTest.postedHighConfidence=0`、`lowConfidenceNote=true`；`scanParts.parts=3`、`unitPackText=""`、`packCut=[]`。故障是人为注入的（附录 A 的 `injected` 字段），证明的是错误处理缺口，不代表该故障常见。
-- **回归测试应断言：** `contextPack` 抛错时 `pack-cut.txt` 非空（或 `engine-status` 不是 success），且 `postedHighConfidence===0`；scan 路径的 `packCut` 非空。
+- **Location:** `src/engines/claude-api.js:416` (`catch { /* the pack is optional */ }`), `src/scan-parts.js:26` (`catch { return { text: '', note: '', notWhole: [] } }`). **Affected mode:** PR, scan.
+- **What this is:** A packing failure is treated as an optional step.
+- **Problem:** (a) Single-call path: `contextPack` throws, there is no `pack-cut.txt`, `engine-status` is treated as success, findings are written as usual, and post keeps high confidence; for comparison, when `pack-cut.txt` names that test, the same finding is downgraded to low confidence. (b) Scan path: when `contextPack` throws, the unit pack text is empty and `packCut=[]`.
+- **Fix:** Write a packing failure to `pack-cut.txt` (or a failed status), and treat all files as not fully seen.
+- **If we skip it:** A packing fault turns "the model saw nothing" into "nothing was cut".
+- **Evidence S7:** `engine.status="success (no engine-status file)"`, `packCutFile=false`, `findingsWritten=true`; `postNoPackCut.postedHighConfidence=1`, `lowConfidenceNote=false`; `postPackCutNamesTest.postedHighConfidence=0`, `lowConfidenceNote=true`; `scanParts.parts=3`, `unitPackText=""`, `packCut=[]`. The fault was injected by hand (the `injected` field in appendix A); what it proves is a gap in error handling, not that this fault is common.
+- **The regression test should assert:** when `contextPack` throws, `pack-cut.txt` is non-empty (or `engine-status` is not success) and `postedHighConfidence===0`; the `packCut` of the scan path is non-empty.
 
-#### S8 [P1] `findLine` 的 20 字符前缀接受不同的期望值，并改写引用
+#### S8 [P1] The 20-character prefix of `findLine` accepts a different expected value and rewrites the quotation
 
-- **位置：** `src/post.js:349`（`findLine`）及 `verifyEvidence`。**影响模式：** PR。
-- **What this is:** 对较长的引用，`findLine` 只比较前 20 个非空白字符。
-- **Problem:** 模型引用 `assert.equal(compute(1), 2)`，实际行是 `assert.equal(compute(1), 3);`，前缀相同，引用被判有效并被**改写**为实际行；`status` 保持 `covered`，没有 note 或降级。
-- **Fix:** 前缀匹配后仍比较整条引用的规范化文本；不一致就算引用未验证，或改写时降级并记 note。
-- **If we skip it:** 模型编造的期望值被悄悄纠正，覆盖结论看起来被证据证实了。
-- **证据 S8：** `longerQuote.findLine=2`、`verifyEvidence.status="covered"`、`evidenceQuoteAfter="assert.equal(compute(1), 3);"`、`noteOrDowngrade=[]`。边界：恰好 20 个非空白字符的引用不受影响（`briefQuoteLiteral.matchesLine=0`）。
-- **回归测试应断言：** 引用 `assert.equal(compute(1), 2)` 对实际行 `assert.equal(compute(1), 3);` 不得成为 `covered` 证据（`findLine===0`，或证据被降级并有 note）。
+- **Location:** `src/post.js:349` (`findLine`) and `verifyEvidence`.**Affected mode:** PR.
+- **What this is:** For longer quotations, `findLine` compares only the first 20 non-whitespace characters.
+- **Problem:** The model quotes `assert.equal(compute(1), 2)`, the actual line is `assert.equal(compute(1), 3);`, the prefixes are the same, and the quotation is judged valid and **rewritten** to the actual line; `status` stays `covered`, with no note or downgrade.
+- **Fix:** After the prefix matches, still compare the normalised text of the whole quotation; if they differ, count the quotation as unverified, or downgrade and add a note when rewriting.
+- **If we skip it:** An expected value invented by the model is quietly corrected, and the coverage conclusion looks confirmed by the evidence.
+- **Evidence S8:** `longerQuote.findLine=2`, `verifyEvidence.status="covered"`, `evidenceQuoteAfter="assert.equal(compute(1), 3);"`, `noteOrDowngrade=[]`. Boundary: a quotation of exactly 20 non-whitespace characters is not affected (`briefQuoteLiteral.matchesLine=0`).
+- **The regression test should assert:** the quotation `assert.equal(compute(1), 2)` against the actual line `assert.equal(compute(1), 3);` must not become `covered` evidence (`findLine===0`, or the evidence is downgraded with a note).
 
-#### S13 [P1] preflight 跳过键忽略规则文件、配置、模型和 SpecGuard 版本
+#### S13 [P1] The preflight skip key ignores rule files, configuration, the model and the SpecGuard version
 
-- **位置：** `src/preflight.js:30`（`reqKey`：title+body）、`:48`（`decide`）。**影响模式：** PR。
-- **What this is:** 同一 head、同一 title/body 已有 SpecGuard 摘要时，跳过本次运行。
-- **Problem:** `decide` 的输入只有 `pr, comments, headSha, includeBots, force, actor, issueAt`；真实摘要里的 marker 是 `summary, head, counts, req, status`，没有规则文件、配置、模型的 marker。基线分支上的规则文件更新、配置变更或模型切换后，同一 head 仍被跳过。
-- **Fix:** 把规则文件内容哈希、关键配置、模型与版本写入摘要 marker，由 `decide` 比对。现有逃生口是 `force: true`，需要用户先知道。
-- **If we skip it:** 采用者改了规则，期待下次 push 生效，却看到 "already has a SpecGuard summary"。
-- **证据 S13：** 同 head/title/body：`"head 07fe197 already has a SpecGuard summary (set force: true to rerun)"`；改标题则 `"review (no skip)"`；`markersInRealSummary=["summary","head","counts","req","status"]`、`markerForRulesConfigOrModel=false`。
-- **回归测试应断言：** 规则文件、配置、模型或版本变化后，同 head 的 `decide` 不返回跳过。
+- **Location:** `src/preflight.js:30` (`reqKey`: title+body), `:48` (`decide`). **Affected mode:** PR.
+- **What this is:** When a SpecGuard summary already exists for the same head and the same title/body, this run is skipped.
+- **Problem:** The inputs of `decide` are only `pr, comments, headSha, includeBots, force, actor, issueAt`; the markers in a real summary are `summary, head, counts, req, status`, and there is no marker for rule files, configuration or model. After a rule file update on the base branch, a configuration change or a model switch, the same head is still skipped.
+- **Fix:** Write the content hash of the rule files, the key configuration, and the model and version into the summary marker, to be compared by `decide`. The existing escape hatch is `force: true`, which the user has to know about first.
+- **If we skip it:** An adopter changes the rules, expects them to take effect on the next push, and instead sees "already has a SpecGuard summary".
+- **Evidence S13:** Same head/title/body: `"head 07fe197 already has a SpecGuard summary (set force: true to rerun)"`; if the title is changed, `"review (no skip)"`; `markersInRealSummary=["summary","head","counts","req","status"]`, `markerForRulesConfigOrModel=false`.
+- **The regression test should assert:** after a change in the rule files, configuration, model or version, `decide` for the same head does not return a skip.
 
-#### U13（新增，对调研文档做事实核查时发现）[P1] `AC-1:` 不被识别为结构化验收条件
+#### U13 (new, found while fact-checking the research document) [P1] `AC-1:` is not recognised as a structured acceptance criterion
 
-- **位置：** `src/requirements.js:62`（`/^\s*AC\s*\d+\s*[:：]\s*(.+)$/i`）、`:216`（同形的第二处）。**影响模式：** PR。
-- **What this is:** `extractCriteria` 从结构化 AC 区块和 `AC<n>:` 行产生确定性的 R 项。
-- **Problem:** `AC\s*\d+` 只允许 `AC` 与数字之间有空白；`AC-1:`、`AC.1:` 不匹配，不产生 R 项，`AC1:`、`AC 1:` 可以。叙述性需求仍交给模型解释，所以后果是少了确定性的 R 项和对应追溯行，不是需求被完全忽略。
-- **Fix:** 允许 `[\s._-]*` 作分隔，并同步修改 `:62` 与 `:216`。
-- **If we skip it:** 用 `AC-1:` 写验收条件的仓库，得到的结构化 R→T 追溯比用 `AC1:` 的少。
-- **证据 U13（本次对 `extractCriteria` 的 `node -e` 直接调用）：**
+- **Location:** `src/requirements.js:62` (`/^\s*AC\s*\d+\s*[:：]\s*(.+)$/i`), `:216` (the second place of the same form). **Affected mode:** PR.
+- **What this is:** `extractCriteria` produces deterministic R items from structured AC blocks and `AC<n>:` lines.
+- **Problem:** `AC\s*\d+` only allows whitespace between `AC` and the digits; `AC-1:` and `AC.1:` do not match and produce no R item, while `AC1:` and `AC 1:` do. Narrative requirements are still left to the model to interpret, so the consequence is a missing deterministic R item and its trace row, not the requirement being ignored altogether.
+- **Fix:** Allow `[\s._-]*` as the separator, and change `:62` and `:216` together.
+- **If we skip it:** A repo that writes its acceptance criteria as `AC-1:` gets less structured R→T traceability than one that uses `AC1:`.
+- **Evidence U13 (this time a direct `node -e` call of `extractCriteria`):**
 
 ```
 "AC1: Reject negative amounts"   => [{"id":"R1","source":"PR body","quote":"Reject negative amounts"}]
@@ -168,163 +168,163 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 "AC.1: Reject negative amounts"  => []
 ```
 
-**交叉引用（不另立编号）：** 调研文档 F32（Gherkin `Background` 被丢弃）也影响 PR 模式：`src/trace.js:254`（`if (/^(Feature|Rule|Background)$/.test(s.kind)) return;`）在分块循环里直接跳过 `Background`，其前置条件不进入任何 scenario 的身份。细节见 [调研文档](research-repo-audit-requirements-chunking-2026-10-16.md) 的 F32，本文不重复。
+**Cross-reference (no separate number):** F32 of the research document (Gherkin `Background` is dropped) also affects PR mode: `src/trace.js:254` (`if (/^(Feature|Rule|Background)$/.test(s.kind)) return;`) skips `Background` directly in the chunking loop, so its preconditions do not enter the identity of any scenario. For details see the [research document](research-repo-audit-requirements-chunking-2026-10-16.md) , F32; this document does not repeat it.
 
-- **回归测试应断言（U13）：** `extractCriteria([{source:"PR body",text:"AC-1: Reject negative amounts"}])` 返回 1 项 R。
-- **回归测试应断言（F32）：** 修改 `Background` 的前置条件后，受它影响的 scenario 的身份与版本（含 #203 的 `tv`）改变，旧的 `covered` 状态过期。
+- **The regression test should assert (U13):** `extractCriteria([{source:"PR body",text:"AC-1: Reject negative amounts"}])` returns 1 R item.
+- **The regression test should assert (F32):** after the preconditions of `Background` are modified, the identity and version (including the `tv` of #203) of the scenarios it affects change, and the old `covered` status expires.
 
-### 3.2 P1：scan 模式
+### 3.2 P1: scan mode
 
-#### S5 [P1] 只有低置信度 finding 的 unit 被记为 covered
+#### S5 [P1] A unit that has only low-confidence findings is recorded as covered
 
-- **位置：** `src/audit-post.js:383`（unit 状态：`hit.has(cid) ? 'gap' : ... 'covered'`）、`:759`（`code.findings.filter((f) => !f.low)`）。**影响模式：** scan。
-- **What this is:** 低置信度 finding 只显示在 Details，不计数。
-- **Problem:** 一个 unit 的唯一 finding 缺 test sketch，被标 `low`（`lowWhy: "no test sketch: the finding may not be a gap"`），状态推导忽略它，unit 写成 `covered`；有 sketch 的同一 finding 则写 `gap`。
-- **Fix:** 有 low finding 的 unit 写 `unsure`，不推进 covered。该问题正在 PR #201 下审查（见 §4），此处因有独立探针而列出。
-- **If we skip it:** 模型可能真实的发现因缺一个格式字段而被洗成已审。
-- **证据 S5：** `lowFinding.low=true`、`status="complete"`、`unitStateInIssue="covered"`；对照 `control.low=false`、`unitStateInIssue="gap"`。
-- **回归测试应断言：** 只有低置信度 finding 的 unit 状态为 `unsure`，不是 `covered`（`unitStateInIssue!=="covered"`）。
+- **Location:** `src/audit-post.js:383` (unit state: `hit.has(cid) ? 'gap' : ... 'covered'`), `:759` (`code.findings.filter((f) => !f.low)`). **Affected mode:** scan.
+- **What this is:** A low-confidence finding is shown only in Details and is not counted.
+- **Problem:** The only finding of a unit lacks a test sketch and is marked `low` (`lowWhy: "no test sketch: the finding may not be a gap"`), the state derivation ignores it, and the unit is written as `covered`; the same finding with a sketch is written as `gap`.
+- **Fix:** Write a unit that has a low finding as `unsure`, and do not advance it to covered. This problem is under review in PR #201 (see §4); it is listed here because it has an independent probe.
+- **If we skip it:** A possibly real finding of the model is laundered into reviewed because a format field is missing.
+- **Evidence S5:** `lowFinding.low=true`, `status="complete"`, `unitStateInIssue="covered"`; for comparison `control.low=false`, `unitStateInIssue="gap"`.
+- **The regression test should assert:** a unit that has only low-confidence findings has the state `unsure`, not `covered` (`unitStateInIssue!=="covered"`).
 
-#### S4 [P1] `EV_PER_BLOCK=8` 截断：第 9 个被引用文件的变更不使 block 过期
+#### S4 [P1] `EV_PER_BLOCK=8` truncation: a change to the 9th cited file does not make the block stale
 
-- **位置：** `src/audit-post.js:347`（`EV_PER_BLOCK = 8`）、`:351`、`:357`。**影响模式：** scan。
-- **What this is:** 每个 block 的状态只保存最多 8 个证据文件的哈希。
-- **Problem:** block 引用 9 个文件，只存前 8 个；只改第 9 个文件，block 不被标 stale，继续携带 `covered`。
-- **Fix:** 保存全部引用文件哈希的聚合哈希；或超限时标记为不可验证。
-- **If we skip it:** 证据多的 block 依赖面最大、最容易被改，却最不容易被重审。
-- **证据 S4：** `citedFiles=9`、`storedHashes=8`、`ninthFileEdited_blockStale=false`；对照 `firstFileEdited_blockStale=true`。
-- **回归测试应断言：** 只改第 9 个被引用文件时 block 为 stale（`ninthFileEdited_blockStale===true`）。
+- **Location:** `src/audit-post.js:347` (`EV_PER_BLOCK = 8`), `:351`, `:357`. **Affected mode:** scan.
+- **What this is:** The state of each block stores the hashes of at most 8 evidence files.
+- **Problem:** A block cites 9 files and only the first 8 are stored; if only the 9th file is changed, the block is not marked stale and keeps carrying `covered`.
+- **Fix:** Store an aggregate hash of the hashes of all cited files; or mark the block as unverifiable when over the limit.
+- **If we skip it:** A block with a lot of evidence has the largest dependency surface and is the most likely to be changed, yet it is the least likely to be re-reviewed.
+- **Evidence S4:** `citedFiles=9`, `storedHashes=8`, `ninthFileEdited_blockStale=false`; for comparison `firstFileEdited_blockStale=true`.
+- **The regression test should assert:** when only the 9th cited file is changed the block is stale (`ninthFileEdited_blockStale===true`).
 
-#### S6 [P1] 未被回答的 block 被记上今天的审查日期，在轮转中沉底
+#### S6 [P1] An unanswered block is recorded with today's review date and sinks to the bottom in the rotation
 
-- **位置：** `src/audit-post.js:383–386`（状态按本次日期写入，`when(b)` 取 `b.at.date`）；`src/audit-collect.js` 的最旧优先层读取该日期。**影响模式：** scan。
-- **What this is:** 轮转按存储的审查日期最旧优先。
-- **Problem:** 模型没有回答的 block（`verify` 产出 `unknown`，note 为 "did not assess"）以 `unsure` 写入，日期是本次。下一轮最旧优先把它排在 A、B（已回答、covered）之后。
-- **Fix:** 不要让未回答的 block 无限靠前（那会造成新的停滞）。下一轮把它放进优先层，重试一次；若连续两轮都未回答，则记为 `unsure`、推进日期，并在 limitations 中点名为"连续未回答"，让轮转继续前进。
-- **If we skip it:** 模型最没能处理的 block 被推到队尾。
-- **证据 S6：** `stored.C_unanswered=["unsure","2026-10-15"]`、`stored.D_not_sent=["covered","2026-10-01"]`；`nextRunCap1=["D"]`、`nextRunCap3=["A","B","D"]`（C 被挤出）。此探针经 `verify/stateOf/readState/collect`，**未**经 `audit-post` 入口。
-- **回归测试应断言：** 第 2 轮 C 未回答后，第 3 轮的选择含 C（`nextRunCap3` 含 C）；若 C 在第 3 轮仍未回答，则其日期推进，且 limitations 中出现"连续未回答"并点名 C。
+- **Location:** `src/audit-post.js:383–386` (the state is written with this run's date, `when(b)` takes `b.at.date`); the oldest-first layer of `src/audit-collect.js` reads that date. **Affected mode:** scan.
+- **What this is:** The rotation goes oldest-first by the stored review date.
+- **Problem:** A block the model did not answer (`verify` yields `unknown`, with the note "did not assess") is written as `unsure`, with this run's date. In the next round oldest-first ranks it after A and B (answered, covered).
+- **Fix:** Do not let an unanswered block stay at the front indefinitely (that would cause a new stall). In the next round put it in the priority layer and retry once; if it is unanswered for two consecutive rounds, record it as `unsure`, advance its date, and name it in limitations as "unanswered in consecutive rounds", so the rotation keeps moving.
+- **If we skip it:** The block the model was least able to handle is pushed to the back of the queue.
+- **Evidence S6:** `stored.C_unanswered=["unsure","2026-10-15"]`, `stored.D_not_sent=["covered","2026-10-01"]`; `nextRunCap1=["D"]`, `nextRunCap3=["A","B","D"]` (C is squeezed out). This probe goes through `verify/stateOf/readState/collect` and does **not** go through the `audit-post` entry point.
+- **The regression test should assert:** after C goes unanswered in round 2, the selection of round 3 includes C (`nextRunCap3` includes C); if C is still unanswered in round 3, its date advances, and "unanswered in consecutive rounds" appears in limitations naming C.
 
-#### S14 = 调研 F34 [P1] 大于 512 KiB 的源码被静默排除
+#### S14 = research F34 [P1] Source files larger than 512 KiB are silently excluded
 
-- **位置：** `src/audit-units.js:13`（`MAX_FILE = 512 * 1024`）、`:89`（`e.size <= MAX_FILE`）。**影响模式：** scan。
-- **What this is / Problem:** 超过上限的源文件在进入 inventory 前被过滤；没有 limitation，meta 与 ctx 中都不出现。
-- **Fix:** 把被跳过的文件及原因写入 `limitations`，并在 issue 摘要里体现。
-- **If we skip it:** 最大的文件往往最复杂，却永远不被扫描，用户也看不到。
-- **证据 S14：** `bigFileBytes=633787`、`inventoryRows=["src/small.js"]`、`limitationsFromInventory=[]`、`metaLimitations=[]`、`bigFileMentionedAnywhereInCtx=false`。与调研 F34 是同一问题，不重复计数。
-- **回归测试应断言：** 超过 512 KiB 的源文件出现在 `limitations` 中并点名该文件（`limitationsFromInventory` 非空）。
+- **Location:** `src/audit-units.js:13` (`MAX_FILE = 512 * 1024`), `:89` (`e.size <= MAX_FILE`). **Affected mode:** scan.
+- **What this is / Problem:** Source files over the limit are filtered out before entering the inventory; there is no limitation, and they appear in neither meta nor ctx.
+- **Fix:** Write the skipped files and the reason into `limitations`, and show them in the issue summary.
+- **If we skip it:** The largest files are often the most complex, yet they are never scanned, and the user cannot see this.
+- **Evidence S14:** `bigFileBytes=633787`, `inventoryRows=["src/small.js"]`, `limitationsFromInventory=[]`, `metaLimitations=[]`, `bigFileMentionedAnywhereInCtx=false`. It is the same problem as research F34 and is not counted twice.
+- **The regression test should assert:** a source file over 512 KiB appears in `limitations` with the file named (`limitationsFromInventory` is non-empty).
 
 ### 3.3 P2
 
-#### U2 [P2] 嵌套 `build/` 目录的变更被静默忽略
+#### U2 [P2] Changes in a nested `build/` directory are silently ignored
 
-- **位置：** `src/collect.sh:27`（默认 IGNORES 含 `build/`）、`:84`。**影响模式：** PR。
-- **What this is / Problem:** `build/` 匹配任一层级的路径段，所以 `internal/build/x.go`（真实 Go 源码）被忽略；整个 PR 只改它时 `skip=true`，输出 "nothing reviewable in diff"，`collect-limits.txt` 与 `diff-dropped.txt` 都是 0 字节，没有任何记录。
-- **Fix:** 被默认 ignore 丢弃的文件写入 `diff-dropped.txt` 并在摘要里显示；或默认 ignore 只匹配仓库根的 `build/`。
-- **If we skip it:** 目录恰好叫 `build` 的源码包永远得不到审查，也看不到原因。
-- **证据 U2：** `outputs=["skip=false","partial=false","skip=true"]`、`stdout="nothing reviewable in diff"`、`collectLimitsBytes=0`、`diffDroppedBytes=0`；对照 `controlOutputs=["skip=false","partial=false"]`、`controlFiles="internal/other/y.go\n"`。
-- **回归测试应断言：** `internal/build/x.go` 的变更要么被审查（`skip=false`），要么出现在 `diff-dropped.txt`（`diffDroppedBytes>0`）。
+- **Location:** `src/collect.sh:27` (the default IGNORES contains `build/`), `:84`. **Affected mode:** PR.
+- **What this is / Problem:** `build/` matches a path segment at any level, so `internal/build/x.go` (real Go source) is ignored; when a whole PR changes only it, `skip=true`, the output is "nothing reviewable in diff", and `collect-limits.txt` and `diff-dropped.txt` are both 0 bytes, leaving no record at all.
+- **Fix:** Write files dropped by the default ignore to `diff-dropped.txt` and show them in the summary; or make the default ignore match only the `build/` at the repo root.
+- **If we skip it:** A source package whose directory happens to be called `build` is never reviewed, and the reason cannot be seen.
+- **Evidence U2:** `outputs=["skip=false","partial=false","skip=true"]`, `stdout="nothing reviewable in diff"`, `collectLimitsBytes=0`, `diffDroppedBytes=0`; for comparison `controlOutputs=["skip=false","partial=false"]`, `controlFiles="internal/other/y.go\n"`.
+- **The regression test should assert:** a change to `internal/build/x.go` is either reviewed (`skip=false`) or appears in `diff-dropped.txt` (`diffDroppedBytes>0`).
 
-#### U4 [P2] `--fail-on-gaps` 对失败的运行返回 0
+#### U4 [P2] `--fail-on-gaps` returns 0 for a failed run
 
-- **位置：** `bin/specguard-local.js:183–185`（`gaps`）、`:205`（`return o['fail-on-gaps'] && r.gaps ? 1 : 0`）。**影响模式：** local。
-- **What this is / Problem:** 退出码只看 `gaps`。findings 不是合法 JSON 时 `status="failed"`、`gaps=false`，退出 0，summary 写 "Could not complete: no valid findings.json"。带 `unknown` 行与 `not_reviewed` 的不完整报告也是 0。USAGE 把它写成 advisory，所以这是行为边界，不是文档矛盾。
-- **Fix:** `--fail-on-gaps` 在 `status` 非 `complete` 时也非零退出（或另加 `--fail-on-incomplete`）。
-- **If we skip it:** 把它当 pre-push 闸的人，在审查失败时被放行。
-- **证据 U4：** `failedRun={exit:0,status:"failed",gaps:false}`；`partialRun={exit:0,status:"complete",gaps:false}`（报告含 `unknown` 行，status 仍是 `complete`）。
-- **回归测试应断言：** `status==="failed"` 时 `--fail-on-gaps` 的退出码非 0。
+- **Location:** `bin/specguard-local.js:183–185` (`gaps`), `:205` (`return o['fail-on-gaps'] && r.gaps ? 1 : 0`). **Affected mode:** local.
+- **What this is / Problem:** The exit code looks only at `gaps`. When findings is not valid JSON, `status="failed"` and `gaps=false`, the exit code is 0, and the summary says "Could not complete: no valid findings.json". An incomplete report with `unknown` rows and `not_reviewed` also gives 0. USAGE describes it as advisory, so this is a behavioural boundary, not a documentation contradiction.
+- **Fix:** Make `--fail-on-gaps` exit non-zero also when `status` is not `complete` (or add a separate `--fail-on-incomplete`).
+- **If we skip it:** Someone who uses it as a pre-push gate is let through when the review fails.
+- **Evidence U4:** `failedRun={exit:0,status:"failed",gaps:false}`; `partialRun={exit:0,status:"complete",gaps:false}` (the report contains `unknown` rows and the status is still `complete`).
+- **The regression test should assert:** when `status==="failed"`, the exit code of `--fail-on-gaps` is non-zero.
 
-#### S1 / U12 [P2] 仅含排除项的 `test_paths` 被忽略（S1 与 U12 是同一问题）
+#### S1 / U12 [P2] `test_paths` containing only exclusions is ignored (S1 and U12 are the same problem)
 
-- **位置：** `src/trace.js:535`（`testScope` 在没有 include 行时返回 `null`）；消费者 `src/collect.sh:252–253`、`src/audit-collect.js:47–51`、`src/audit-units.js:85–87`、`src/leads.js:286–287`、`src/test-map.js:137`。**影响模式：** PR、scan、local。
-- **What this is / Problem:** `test_paths: "!tests/legacy/**"` 令 `testScope` 返回 `null`，等同未配置，各消费者回退到按文件名判断，排除不生效；`scan_paths` 用同样的 `!` 语法却生效。
-- **Fix:** `testScope` 对只有排除项的配置返回"默认判断并排除"的函数；或在输入校验阶段拒绝并提示。
-- **If we skip it:** 用户配置了排除，旧测试仍被当作证据。
-- **证据 S1：** `testScopeForExclusionOnly=null`、`layoutHeaderShowsConfig=false`、`layoutLists="test directories: tests/legacy (1), tests/new (1)"`、`unitTestsColumn="tests/new/amount.test.js, tests/legacy/old.test.js"`；对照 `scan_paths`：`"tests/new/amount.test.js"`。**U12：** `scopeIsNull=true`、`legacyTestStillATest=true`。
-- **回归测试应断言：** `testScope("!legacy/**")` 不为 `null`，`legacy/a.test.js` 不被当作测试；`unitTestsColumn` 不含 `tests/legacy/old.test.js`。
+- **Location:** `src/trace.js:535` (`testScope` returns `null` when there are no include lines); consumers `src/collect.sh:252–253`, `src/audit-collect.js:47–51`, `src/audit-units.js:85–87`, `src/leads.js:286–287`, `src/test-map.js:137`. **Affected mode:** PR, scan, local.
+- **What this is / Problem:** `test_paths: "!tests/legacy/**"` makes `testScope` return `null`, which is the same as not configured, so the consumers fall back to judging by file name and the exclusion has no effect; `scan_paths` uses the same `!` syntax and does take effect.
+- **Fix:** Make `testScope` return a "default judgement plus exclusion" function for a configuration with only exclusions; or reject it with a message at the input validation stage.
+- **If we skip it:** The user configured an exclusion, yet the old tests are still used as evidence.
+- **Evidence S1:** `testScopeForExclusionOnly=null`, `layoutHeaderShowsConfig=false`, `layoutLists="test directories: tests/legacy (1), tests/new (1)"`, `unitTestsColumn="tests/new/amount.test.js, tests/legacy/old.test.js"`; for comparison `scan_paths`: `"tests/new/amount.test.js"`. **U12:** `scopeIsNull=true`, `legacyTestStillATest=true`.
+- **The regression test should assert:** `testScope("!legacy/**")` is not `null`, `legacy/a.test.js` is not treated as a test, and `unitTestsColumn` does not contain `tests/legacy/old.test.js`.
 
-#### S12 [P2] 可复用 workflow 只转发 action 47 个输入中的 12 个
+#### S12 [P2] The reusable workflow forwards only 12 of the action's 47 inputs
 
-- **位置：** `.github/workflows/specguard.yml:14`（`workflow_call`）、`:36–37`（`uses: Mira190/SpecGuard@caa99fbbef...` 的 `with:`）。**影响模式：** PR、scan。
-- **What this is / Problem:** `action.yml` 有 47 个输入，workflow 只转发 12 个。`workflow_call` 暴露的 7 个（`mode, requirements_paths, standards_paths, test_paths, scan_issue, model, effort`）都被转发，没有"暴露但未转发"。未转发的 35 个里重要的有：`engine`、`max_budget_usd`、`ignore`、`max_diff_kb`、`focus_threshold`、`focus_files`、`max_comments`、`standards_checks`、`standards_ref`、`coverage_files`、`resolve_stale`、`force`、`include_bots`、`fail_on_error`、`max_units`、`scan_paths`、`scan_issue_repo`、`scan_issue_token`、`scan_batch_blocks`、`audit_max_requirements`。通过可复用 workflow 使用的采用者无法设置它们；`force`（S13 的 preflight 逃生口）也在其中。
-- **Fix:** 转发全部输入，或在 README 声明哪些只能直接使用 action。
-- **If we skip it:** 采用者以为能调的开关，其实没有传进去。
-- **证据 S12：** `actionInputs=47`、`forwarded=12`、`workflowCallInputsNotForwarded=[]`、`forwardedButNotDeclaredInAction=[]`、`actionInputsNotForwarded` 共 35 项（附录 A）；`pinnedActionRef={pin:"caa99fbbef",inputsAtPin:45}`，即 workflow 固定的 action 提交比 main 少 2 个输入。
-- **回归测试应断言：** 转发的输入集合等于 `action.yml` 的输入集合（`actionInputsNotForwarded` 为空），或 README 列出的白名单与实际一致。
+- **Location:** `.github/workflows/specguard.yml:14` (`workflow_call`), `:36–37` (`uses: Mira190/SpecGuard@caa99fbbef...` 's `with:`). **Affected mode:** PR, scan.
+- **What this is / Problem:** `action.yml` has 47 inputs and the workflow forwards only 12. The 7 exposed by `workflow_call` (`mode, requirements_paths, standards_paths, test_paths, scan_issue, model, effort`) are all forwarded, and there is no "exposed but not forwarded". Important ones among the 35 not forwarded: `engine`, `max_budget_usd`, `ignore`, `max_diff_kb`, `focus_threshold`, `focus_files`, `max_comments`, `standards_checks`, `standards_ref`, `coverage_files`, `resolve_stale`, `force`, `include_bots`, `fail_on_error`, `max_units`, `scan_paths`, `scan_issue_repo`, `scan_issue_token`, `scan_batch_blocks`, `audit_max_requirements`. Adopters who use it through the reusable workflow cannot set them; `force` (the preflight escape hatch of S13) is among them.
+- **Fix:** Forward all inputs, or state in the README which ones can only be used by using the action directly.
+- **If we skip it:** Switches that adopters believe they can set are in fact not passed in.
+- **Evidence S12:** `actionInputs=47`, `forwarded=12`, `workflowCallInputsNotForwarded=[]`, `forwardedButNotDeclaredInAction=[]`, `actionInputsNotForwarded` has 35 items in total (appendix A); `pinnedActionRef={pin:"caa99fbbef",inputsAtPin:45}`, i.e. the action commit pinned by the workflow has 2 fewer inputs than main.
+- **The regression test should assert:** the set of forwarded inputs equals the set of inputs of `action.yml` (`actionInputsNotForwarded` is empty), or the allowlist listed in the README matches the actual state.
 
-#### U9 [P2] skill 示例与边界规则矛盾
+#### U9 [P2] The skill example contradicts the boundary rule
 
-- **位置：** `skills/test-review/references/trace.md:44`、`skills/test-review/references/example.json:4`（`.github/skills/test-review/` 是字节相同的拷贝）。**影响模式：** PR。
-- **What this is / Problem:** 规则要求两侧边界；示例却只用一条断言就判 `covered`。
-  - trace.md:44：`A test must assert both sides of the boundary (n-1, n, n+1); if it does not, report `weak_test` for the missing boundary.`
-  - example.json:4：`"obligation":"Orders of 100 or more get a 10% discount"`，`"evidence":[{"path":"test/discount.test.js","line":9,"quote":"assert.equal(discount(100), 90);"}]`，`"status":"covered"`，`"reason":"The unit test asserts the boundary 100 against the literal 90."`
-- **Fix:** 示例改成两侧都有断言，或把该示例改为 `weak_test`；示例会被模型当作先例，应与规则一致。
-- **If we skip it:** 模型更可能模仿示例：只有 `n` 一侧的断言就报 covered（影响程度未测，没有调用模型）。
-- **证据 U9：** `evidenceAssertions=["assert.equal(discount(100)"]`，示例证据中只有这 1 条断言。
-- **回归测试应断言：** `example.json` 的 `covered` 证据同时含边界两侧的断言，或该示例的状态为 `weak_test`。
+- **Location:** `skills/test-review/references/trace.md:44`, `skills/test-review/references/example.json:4` (`.github/skills/test-review/` is a byte-identical copy). **Affected mode:** PR.
+- **What this is / Problem:** The rule requires both sides of the boundary; the example nevertheless judges `covered` with a single assertion.
+  - trace.md:44: `A test must assert both sides of the boundary (n-1, n, n+1); if it does not, report `weak_test` for the missing boundary.`
+  - example.json:4: `"obligation":"Orders of 100 or more get a 10% discount"`, `"evidence":[{"path":"test/discount.test.js","line":9,"quote":"assert.equal(discount(100), 90);"}]`, `"status":"covered"`, `"reason":"The unit test asserts the boundary 100 against the literal 90."`
+- **Fix:** Change the example so that both sides have assertions, or change the example to `weak_test`; the model treats the example as a precedent, so it should agree with the rule.
+- **If we skip it:** The model is more likely to imitate the example: report covered with an assertion on only the `n` side (the degree of impact was not measured, no model was called).
+- **Evidence U9:** `evidenceAssertions=["assert.equal(discount(100)"]`, the example evidence has only this 1 assertion.
+- **The regression test should assert:** the `covered` evidence of `example.json` contains assertions on both sides of the boundary, or the status of that example is `weak_test`.
 
-### 3.4 P3：eval 指标与仓库自身标准
+### 3.4 P3: eval metrics and the repo's own standard
 
-除 V1 外，这些只影响离线评估的数字，不影响 PR 或 scan 的运行结果。V1 是仓库自己的编码标准未被满足。
+Apart from V1, these affect only the numbers of the offline evaluation and not the run results of PR or scan. V1 is that the repo's own coding standard is not met.
 
-- **S9：** `eval/weekly-report.js:62–68` 与 `post.anchorTouched/testsChanged`（`src/post.js:1295`、`:1317`）规则不同。把 base 合并进 PR 分支后，weekly 判 `anchor_touched=true, tests_changed=true, outcome="addressed"`，post 规则判 `false/false/"open"`；评论所在文件被删除时，weekly 判 `addressed`，post 规则为 `anchor_touched=null`、`"not_observed"`。效果：base 合并会抬高 reviewer 的 "addressed" 率。 回归测试应断言：weekly 与 post 对同一输入给出相同的 `anchor_touched`/`tests_changed`（base 合并场景同为 `false/false`，删除文件同为 `null`）。
-- **S10：** `eval/grade.js:96–104`、`:151`。同一个 missing_test 作为 summary item 出现时 `fp=1, clean_ok=false, pass=false`；只作为 coverage 行出现时 `fp=0, clean_ok=true, pass=true`。clean 用例的 FP 取决于该发现显示在哪里。与主报告 F29 相关（F29 是 TP 重复计数，S10 是 FP 漏计）。 回归测试应断言：clean 用例中，同一 missing_test 作为 summary item 或仅作为 coverage 行，`fp` 相同（`coverageRowOnly.fp===sameGapAsSummaryItem.fp`）。
-- **U7：** `eval/bundle.js:37–60`。真实 `buildSummary` 的摘要含 `### Missing unit tests (2)`，但没有 "N more item(s)" details，`bundle.parseSummary` 返回 0 项（`bundleSummaryCount=0`）；`parseDropped` 返回 1 项（`bundleDroppedCount=1`），而摘要里有 2 行 `Dropped findings`。bundle 的计数与真实摘要不一致。 回归测试应断言：`bundle.parseSummary(summary).length` 等于摘要列出的 item 数（本例为 2）。
-- **U8：** `eval/prove.js:443`。`results-prove.json` 写在共享的 `out` 目录，而不是各 case 目录；跑两个 case 后 `out` 下只有一份 `results-prove.json`，`perCaseResults=[false,false]`，多 case 互相覆盖。 回归测试应断言：每个 case 的 `results-prove.json` 在各自 case 目录里（`perCaseResults` 全为 `true`），`out` 根目录下没有该文件。
-- **U10：** `eval/label-export.js:16`。`findingId` 不含 `kind`；同 path/line 的 `missing_test` 与 `weak_test` 得到相同 id `F502e6ddc0`，`exportRowIds=["F502e6ddc0","F502e6ddc0"]`，标注时互相覆盖。 回归测试应断言：`findingId(a)!==findingId(b)`（`kind` 不同），`exportRowIds` 无重复。
-- **U11：** `eval/szz.js:91`。`.sql` 文件里被删除的 `-- header comment` 行以 `--- ` 开头，被当作 diff 文件头，旧侧行号丢失：含该注释时 `lines=[]`、`addOnly=true`；对照 `lines=[1,4]`、`addOnly=false`。SZZ 归因因此漏掉修复行。 回归测试应断言：含 `-- header comment` 的 `.sql` 的 `fixLines` 与对照一致（`lines` 含 4，`addOnly===false`）。
-- **V2（新增，读 `eval/replay.js` 时发现）：** `eval/replay.js:85` 的行带 `findings_present`，`:90` 的表头没有这一列。模型没有写 `findings.json` 的 PR，在打印出来的表里是全 0 的一行，与"审查过、没有发现"无法区分。探针 V2：`row.findings_present=false`，`printedTable="pr          trace  inline  high  low  summary  pre-existing\nnofindings  auto   0       0     0    0        0"`，`tableMentionsFindingsPresent=false`。只影响回放的人工判读；修复是在表里加一列或标 `NO FINDINGS`。 回归测试应断言：`finish` 打印的表对 `findings_present===false` 的行有可见标记，且不与全 0 的正常行相同。
-- **V1（新增，读 `.github/instructions/specguard.instructions.md` 时发现）：** 该文件第 8 行要求"每个导出函数都需要断言返回值或抛错的单元测试"。探针 V1 在 `src/*.js` 与 `eval/*.js` 的 43 个非测试文件中，找到 15 个文件共 34 个导出函数，没有任何 `*.test.js` 按名字提到（例：`src/post.js` 的 `assertionKind`、`counterexampleOk`、`citationsOf`、`loadCoverage`、`applyCoverage`、`coverageAtoms`、`findingBlock`、`findingHead`；`src/trace.js` 的 `testScope`、`catBatch`；`src/test-map.js` 的 `indexTests`、`noExt`、`classAndMethod`）；`src/limitations.js` 和 `src/scan-parts.js` 没有同名的 `.test.js`（标准要求测试"live next to the code"）。边界：按名字匹配，间接覆盖（例如经由 `post.js` 入口的测试）不会被识别，所以这是"没有直接单元测试"的**上界**，不是"完全未被测试"。已知误报：`src/scan-parts.js` 的 `plan()` 在 `src/claude-api.test.js` 中被直接测试，只是没有同名的 `scan-parts.test.js`。修复时应优先处理真正未测试的决策路径导出（例如 `post.js` 的 `counterexampleOk`、`applyCoverage`、`findingBlock`），而不是机械地补齐全部 34 个。SpecGuard 用同一标准审别人的仓库，自己不满足它。 回归测试应断言：每个导出函数至少被一个 `*.test.js` 按名引用并断言返回值（`filesWithUnreferencedExports` 为空，`exportingFilesWithoutSiblingTest` 为空）。
+- **S9:** `eval/weekly-report.js:62–68` and `post.anchorTouched/testsChanged` (`src/post.js:1295`, `:1317`) have different rules. After the base is merged into the PR branch, weekly judges `anchor_touched=true, tests_changed=true, outcome="addressed"`, while the post rules judge `false/false/"open"`; when the file holding the comment is deleted, weekly judges `addressed`, while the post rules give `anchor_touched=null`, `"not_observed"`. Effect: a base merge raises the reviewer's "addressed" rate. The regression test should assert: weekly and post give the same `anchor_touched`/`tests_changed` for the same input (`false/false` for the base-merge scenario, `null` for the deleted file).
+- **S10:** `eval/grade.js:96–104`, `:151`. When the same missing_test appears as a summary item, `fp=1, clean_ok=false, pass=false`; when it appears only as a coverage row, `fp=0, clean_ok=true, pass=true`. The FP of a clean case depends on where the finding is displayed. Related to F29 of the main report (F29 is TP double counting, S10 is FP under-counting). The regression test should assert: in a clean case, the same missing_test gives the same `fp` whether it appears as a summary item or only as a coverage row (`coverageRowOnly.fp===sameGapAsSummaryItem.fp`).
+- **U7:** `eval/bundle.js:37–60`. The summary of the real `buildSummary` contains `### Missing unit tests (2)` but no "N more item(s)" details, and `bundle.parseSummary` returns 0 items (`bundleSummaryCount=0`); `parseDropped` returns 1 item (`bundleDroppedCount=1`), while the summary has 2 `Dropped findings` rows. The bundle's counts do not agree with the real summary. The regression test should assert: `bundle.parseSummary(summary).length` equals the number of items the summary lists (2 in this example).
+- **U8:** `eval/prove.js:443`. `results-prove.json` is written in the shared `out` directory instead of each case directory; after running two cases there is only one `results-prove.json` under `out`, `perCaseResults=[false,false]`, and multiple cases overwrite each other. The regression test should assert: the `results-prove.json` of each case is in its own case directory (`perCaseResults` are all `true`), and there is no such file in the root of `out`.
+- **U10:** `eval/label-export.js:16`. `findingId` does not contain `kind`; a `missing_test` and a `weak_test` at the same path/line get the same id `F502e6ddc0`, `exportRowIds=["F502e6ddc0","F502e6ddc0"]`, and they overwrite each other during labelling. The regression test should assert: `findingId(a)!==findingId(b)` (different `kind`), and `exportRowIds` has no duplicates.
+- **U11:** `eval/szz.js:91`. A deleted `-- header comment` line in a `.sql` file starts with `--- ` and is treated as a diff file header, so the old-side line numbers are lost: with that comment `lines=[]` and `addOnly=true`; for comparison `lines=[1,4]` and `addOnly=false`. SZZ attribution therefore misses the fix lines. The regression test should assert: the `fixLines` of a `.sql` containing `-- header comment` are consistent with the comparison (`lines` contains 4, `addOnly===false`).
+- **V2 (new, found while reading `eval/replay.js`):** `eval/replay.js:85` has a row carrying `findings_present`, and the header at `:90` has no such column. A PR for which the model did not write `findings.json` appears in the printed table as an all-zero row, which cannot be told apart from "reviewed, nothing found". Probe V2: `row.findings_present=false`, `printedTable="pr          trace  inline  high  low  summary  pre-existing\nnofindings  auto   0       0     0    0        0"`, `tableMentionsFindingsPresent=false`. It only affects the human reading of the replay; the fix is to add a column to the table or to mark `NO FINDINGS`. The regression test should assert: the table printed by `finish` has a visible marker for rows with `findings_present===false`, and it is not identical to a normal all-zero row.
+- **V1 (new, found while reading `.github/instructions/specguard.instructions.md`):** Line 8 of that file requires "every exported function needs a unit test that asserts the return value or the thrown error". Among the 43 non-test files in `src/*.js` and `eval/*.js`, probe V1 finds 34 exported functions in 15 files that no `*.test.js` mentions by name (for example `assertionKind`, `counterexampleOk`, `citationsOf`, `loadCoverage`, `applyCoverage`, `coverageAtoms`, `findingBlock`, `findingHead` of `src/post.js`; `testScope`, `catBatch` of `src/trace.js`; `indexTests`, `noExt`, `classAndMethod` of `src/test-map.js`); `src/limitations.js` and `src/scan-parts.js` have no `.test.js` of the same name (the standard requires tests to "live next to the code"). Boundary: matching is by name, so indirect coverage (for example by a test going through the `post.js` entry point) is not recognised; this is therefore an **upper bound** on "has no direct unit test", not "is not tested at all". Known false positive: `plan()` of `src/scan-parts.js` is tested directly in `src/claude-api.test.js`, there is just no `scan-parts.test.js` of the same name. When fixing, first handle the exports that are really untested decision paths (for example `counterexampleOk`, `applyCoverage`, `findingBlock` of `post.js`), instead of mechanically filling in all 34. SpecGuard audits other people's repos by the same standard and does not meet it itself. The regression test should assert: every exported function is referenced by name by at least one `*.test.js` and its return value is asserted (`filesWithUnreferencedExports` is empty, `exportingFilesWithoutSiblingTest` is empty).
 
 ### 3.5 By design
 
-#### S11 大 PR 的 hunk 被截断但状态仍是 complete：按设计，不记为缺陷
+#### S11 Large-PR hunks are truncated but the status is still complete: by design, not counted as a defect
 
-- **位置：** `src/post.js:1442`、`src/focus.js:1–8`（文件头注释）。
-- **事实：** 3001 个变更行的单文件 PR 中，`changedLinesNotShownToModel=2495`，`runStatus="complete"`、`headMarker=true`；摘要显示 `Large PR: diffs of 1 large file was shortened in the prompt`，`cleanVerdict=false`（不显示 "No unit test gaps found"）。
-- **为什么不记缺陷：** post.js:1442 的注释写明 `not reduced mode, not a failure: incomplete only when a changed file was left out, so the next push reviews again`；focus.js 头部写明 `a chosen file is never dropped for size`。这是明示的取舍，且用户可见。
-- **可选改进（不计入缺陷）：** 若团队认为被截断的行里可能有未覆盖的义务，可以把 `shortened > 0` 提升为 incomplete。
-- **回归测试应断言：** （保持现状）`shortened>0` 时摘要含 `Large PR` 横幅且 `cleanVerdict===false`。
+- **Location:** `src/post.js:1442`, `src/focus.js:1–8` (file header comment).
+- **Fact:** In a single-file PR with 3001 changed lines, `changedLinesNotShownToModel=2495`, `runStatus="complete"`, `headMarker=true`; the summary shows `Large PR: diffs of 1 large file was shortened in the prompt`, `cleanVerdict=false` (it does not show "No unit test gaps found").
+- **Why it is not counted as a defect:** post.js:1442 's comment states `not reduced mode, not a failure: incomplete only when a changed file was left out, so the next push reviews again`; focus.js header states `a chosen file is never dropped for size`. This is an explicit trade-off, and it is visible to the user.
+- **Optional improvement (not counted as a defect):** If the team thinks the truncated lines may contain uncovered obligations, `shortened > 0` can be promoted to incomplete.
+- **The regression test should assert:** (keep the current behaviour) when `shortened>0`, the summary contains the `Large PR` banner and `cleanVerdict===false`.
 
-## 4. 修复状态
+## 4. Fix status
 
-主报告 F19–F29 的在审修复 PR：
+Fix PRs under review for F19–F29 of the main report:
 
-| 发现 | PR | 说明 |
+| Finding | PR | Note |
 |---|---|---|
-| F19、F20 | #201 | |
-| F21、F25 | #203 | |
-| F22、F23 | #202 | 叠在 #198 之上 |
-| F24、F26 | #200 | |
-| F27、F28 | #205 | 叠在 #198 之上 |
+| F19, F20 | #201 | |
+| F21, F25 | #203 | |
+| F22, F23 | #202 | Stacked on top of #198 |
+| F24, F26 | #200 | |
+| F27, F28 | #205 | Stacked on top of #198 |
 | F29 | #204 | |
 
-另：#197 是"断言被删除后提升低置信度"的 raise fix，作用在 lead 之后，与 U5、U6 不重叠。
+Also: #197 is the raise fix for "raise low confidence after an assertion is deleted"; it acts after the lead and does not overlap with U5 and U6.
 
-本补充各项的状态：
+Status of each item in this supplement:
 
-- **S5：** 正在 #201 第三轮修复（只有低置信度 finding 或 finding 被丢弃的 unit 记为 `unsure`，并推进日期以免轮转停滞），不是"未修复"。
-- **S1 / U12：** 已在 #200 的 PR 描述里作为已知问题记录，修复未开始。
-- **其余各项**（含 V1、V2）尚未修复，也没有已知的在审 PR。
+- **S5:** being fixed in the third round of #201 (a unit with only a low-confidence finding, or whose finding was dropped, is recorded as `unsure`, and the date is advanced so the rotation does not stall); it is not "unfixed".
+- **S1 / U12:** already recorded as a known problem in the PR description of #200; the fix has not started.
+- **All other items** (including V1 and V2) are not fixed yet, and there is no known PR under review for them.
 
-建议顺序：
+Suggested order:
 
-1. **第一组（PR 主路径，改动都小）：** U13（`AC-1:` 解析）和调研 F32（Gherkin `Background`）。修 F32 时，继承的 `Background` 必须同时进入 #203 引入的 `tv` 文本版本，否则修改前置条件后 scenario 不会过期。
-2. **错误放心：** U1、S2、S7、S13。
-3. **证据可见性：** U3、S3、S8。
-4. **lead 覆盖面与 scan 状态：** U5、U6；S4、S6、S14（S5 在 #201）。
-5. 其余按 P2、P3。
+1. **First group (main PR path, all small changes):** U13 (`AC-1:` parsing) and research F32 (Gherkin `Background`). When fixing F32, the inherited `Background` must also enter the `tv` text version introduced by #203, otherwise scenarios do not expire after the preconditions are modified.
+2. **False reassurance:** U1, S2, S7, S13.
+3. **Evidence visibility:** U3, S3, S8.
+4. **Lead coverage and scan state:** U5, U6; S4, S6, S14 (S5 is in #201).
+5. The rest in order of P2, P3.
 
-每项修复保留对应探针，把断言反过来作为回归测试；每项的"回归测试应断言"见 §3。
+Keep the matching probe for every fix and invert its assertions to use as the regression test; the "regression test should assert" of each item is in §3.
 
-## 5. 附录
+## 5. Appendices
 
-探针从 `ee1c158` 的 checkout 根目录运行：`node audit-supplement.cjs`、`node audit-supplement-2.cjs`（U 系列需要 Git bash 在 PATH 前，脚本头注释有说明）。U13 的验证命令见 §3.1。
+The probes are run from the checkout root of `ee1c158`: `node audit-supplement.cjs`, `node audit-supplement-2.cjs` (the U series needs Git bash in front of PATH, as explained in the script header comment). The verification command of U13 is in §3.1.
 
-### 附录 A：探针 S1–S14（audit-supplement.cjs）
+### Appendix A: probes S1–S14 (audit-supplement.cjs)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand the script or result</summary>
 
 ```javascript
 // Supplementary audit probes S1-S14. Each probe asserts the CURRENT (suspected buggy) behaviour and returns the observed facts.
@@ -751,10 +751,10 @@ runAll().then(() => { console.log(JSON.stringify(results, null, 2)); }).finally(
 
 </details>
 
-### 附录 A 实际结果（main ee1c158）
+### Appendix A actual results (main ee1c158)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand the script or result</summary>
 
 ```json
 [
@@ -1086,10 +1086,10 @@ runAll().then(() => { console.log(JSON.stringify(results, null, 2)); }).finally(
 
 </details>
 
-### 附录 B：探针 U1–U12（audit-supplement-2.cjs）
+### Appendix B: probes U1–U12 (audit-supplement-2.cjs)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand the script or result</summary>
 
 ```javascript
 // Supplement-2 probes (U1-U12). Run from the SpecGuard checkout root: node .audit-probe/audit-supplement-2.cjs
@@ -1334,10 +1334,10 @@ console.log(JSON.stringify(results, null, 2));
 
 </details>
 
-### 附录 B 实际结果（main ee1c158）
+### Appendix B actual results (main ee1c158)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand the script or result</summary>
 
 ```json
 [
@@ -1555,10 +1555,10 @@ console.log(JSON.stringify(results, null, 2));
 
 </details>
 
-### 附录 C：探针 V1–V2（audit-supplement-3.cjs）
+### Appendix C: probes V1–V2 (audit-supplement-3.cjs)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand the script or result</summary>
 
 ```javascript
 // Supplement-3 probes (V1, V2). Run from the checkout root of ee1c158: node audit-supplement-3.cjs
@@ -1598,10 +1598,10 @@ out.V1 = { prodFilesChecked: prod.length, filesWithUnreferencedExports: unref, e
 
 </details>
 
-### 附录 C 实际结果（main ee1c158）
+### Appendix C actual results (main ee1c158)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand the script or result</summary>
 
 ```json
 ﻿{
@@ -1747,10 +1747,10 @@ out.V1 = { prodFilesChecked: prod.length, filesWithUnreferencedExports: unref, e
 
 </details>
 
-### 附录 C：覆盖核对脚本（coverage-check.cjs）
+### Appendix C: coverage check script (coverage-check.cjs)
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand the script or result</summary>
 
 ```javascript
 // Coverage check for the supplement's section 2: git ls-tree minus the declared out-of-scope patterns, diffed against the paths/globs in the table.
@@ -1762,7 +1762,7 @@ const rx = (g) => new RegExp('^' + g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replac
 const OUT = ['**/*.test.js', 'test/**', 'tests/**', '**/fixtures/**', 'eval/cases/**', 'eval/results/**', 'eval/replay/*.json', 'docs/**', 'research/**', 'NOTICE', '.gitattributes', '.gitignore', 'eval/**/README.md'].map(rx);
 const inScope = tracked.filter((f) => !OUT.some((r) => r.test(f)));
 const sec = doc.slice(doc.indexOf('\n## 2.'), doc.indexOf('\n## 3.'));
-const secLines = sec.split('\n'), start = secLines.findIndex((l) => l.startsWith('| 文件 | 状态 |'));
+const secLines = sec.split('\n'), start = secLines.findIndex((l) => l.startsWith('| File | Status |'));
 let end = start + 1; while (end < secLines.length && secLines[end].startsWith('|')) end++;
 const rows = secLines.slice(start + 2, end); // the first table only (the out-of-scope table below it is not a coverage claim)
 const globs = rows.flatMap((l) => [...l.split('|')[1].matchAll(/`([^`]+)`/g)].map((m) => m[1]));
@@ -1774,10 +1774,10 @@ console.log(JSON.stringify({ ref, tracked: tracked.length, outOfScope: tracked.l
 
 </details>
 
-### 附录 C：覆盖核对输出
+### Appendix C: coverage check output
 
 <details>
-<summary>展开脚本或结果</summary>
+<summary>Expand the script or result</summary>
 
 ```json
 {
